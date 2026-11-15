@@ -1,0 +1,32 @@
+# UAL generated indexes & staging
+.ual/
+*.duckdb
+*.duckdb.wal
+*.parquet
+
+# Unreal Engine
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+*.sln
+*.suo
+*.user
+.vs/
+.idea/
+.vscode/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# WorkBuddy local workspace data
+.workbuddy/
+
+# OS
+Thumbs.db
+.DS_Store

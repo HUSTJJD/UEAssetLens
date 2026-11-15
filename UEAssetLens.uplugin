@@ -1,0 +1,30 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "2.0.0",
+	"FriendlyName": "UEAssetLens",
+	"Description": "Deterministic, offline asset specification indexer. Zero VLM, AssetRegistry-based incremental scan + headless Commandlet, writes asset specs to .ual/index.duckdb.",
+	"Category": "Editor",
+	"CreatedBy": "AnnBuildTools",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "UEAssetLens",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "UEAssetLensEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		},
+		{
+			"Name": "UEAssetLensTests",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	]
+}
