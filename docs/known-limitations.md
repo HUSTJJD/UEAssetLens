@@ -14,6 +14,8 @@
 | 8 | 16 维指纹存在方向余弦主导的假阳性 | M2 | 种子数据实测 0.914 误报，需人工复核 |
 | 9 | `verify-references` 是正则启发式 | M4 | 非 UE 反射级解析，存在动态资产/retarget 误报 |
 | 10 | 白名单机制 | M4 | 仅文档约定，**尚未实现** |
+| 11 | 引擎内 MCP 依赖 UE6 实验性插件 | M5 | C++ 模块实机编译**零警告通过**；编辑器内 `tools/list` 运行时联调仍待办，见 §11 |
+| 12 | 每次工具调用启动一个 Python 进程 | M5 | 百毫秒级延迟；已用 `RunAsync` 避免阻塞 game thread，见 §12 |
 
 ---
 
@@ -58,6 +60,34 @@ DuckDB FTS 不随 `INSERT` 自动更新。`ual-cli build` 每次灌库后调用 
 `docs/ci-gates.md` §4 给出了白名单文件约定，但当前 CLI 只做到「报告 + 非零退出」，没有读取白名单、没有过期校验、没有 code review 集成。落地前请勿依赖该机制绕过门禁。
 
 ---
+
+## 11. 引擎内 MCP 编译已验证，运行时联调未闭环
+
+**现象**：`Source/UEAssetLensMCP/` 按 UE6 源码树里 `ModelContextProtocol` 插件的公开头文件编写，**C++ 模块已实机编译通过**；尚未完成编辑器内的端到端联调（启动编辑器 → `tools/list` 出现 4 个工具 → 调用返回 TOON/YAML）。
+
+本地尝试过三次 UBT 编译，前两次失败原因都**不在本次新增代码**：
+
+| 尝试 | 阻塞 |
+| --- | --- |
+| `AnnEditor Win64 Development -Project=Ann.uproject` | `Ann.Target.cs` / `AnnEditor.Target.cs` 等 4 个文件引用 `EngineIncludeOrderVersion.Unreal5_5`，UE6 已移除该枚举 → `Failed (RulesError)` |
+| 临时工程 + `AdditionalPluginDirectories=Ann/Plugins` | 扫描到 `ThirdParty/UnLua`，其 `Lua.Build.cs` 触发 CMake，`cmake_minimum_required` 版本过旧 → `Failed (RulesError)` |
+| 仅含 UAL 的隔离工程 + `-Module=UEAssetLensMCP` | **成功**：`Result: Succeeded`，编译并链接出 `UnrealEditor-UEAssetLensMCP.dll`；首轮有 7 条 `UE_LOG` 弃用警告，改用 UE6 的 `UE_LOGF` + `%ls` 后复编译**零警告** |
+
+隔离工程用 `tar` 复制插件源码、只放 UAL 一个插件，绕开了 `Ann` 的 Target 规则与 `ThirdParty/UnLua` 的 CMake 问题。编译产物落在隔离工程的 `Binaries/`，未污染引擎目录。
+
+但这也说明一个独立事实：**宿主工程 `Ann` 自身仍带 UE5.5 时代的 Target 规则**，`Intermediate/Build` 缓存的 `EngineVersion 5.6.0` 与源码树 `UE6` 不一致。在 `Ann` 完成 UE6 适配前，官方 Unreal MCP 能否在该工程启用需要用户确认。
+
+**当前缓解**：`engine_bridge.py --self-test`、pytest、CLI 自检、文档漂移门禁与严格站点构建都不依赖 UE SDK，可独立验证 Python 侧全链路；C++ 侧保持最小 API 面（`AddTool` / `OnRefreshTools` / `MakeTextResult`），并把 `ModelContextProtocol` 声明为 `Optional` 插件依赖——插件未启用时模块不注册工具，不影响 UAL 其余功能。
+
+**待办**：① 让 `Ann` 的 `*.Target.cs` 适配 UE6 后编译整个 `AnnEditor` target；② 在编辑器里确认 `ModelContextProtocol` 已启用；③ 用 MCP Inspector 对 `http://127.0.0.1:8000/mcp` 做 `tools/list` 与 4 次 `tools/call`。
+
+## 12. 引擎内工具每次调用启动一个 Python 进程
+
+**现象**：`FUALEngineMcpBridge::CallTool` 用 `FPlatformProcess::ExecProcess` 拉起 `engine_bridge.py`，进程退出后读取 UTF-8 响应文件。一次调用包含 Python 解释器启动、DuckDB 打开与索引查询，延迟在百毫秒量级。
+
+**影响**：交互式 Ask 的体感延迟高于常驻进程方案；高频批量调用（例如一次会话几十次检索）成本明显。
+
+**当前缓解**：`FUALEngineMcpTool::RunAsync` 把调用放到线程池，不阻塞编辑器 game thread；请求/响应走文件而非 stdout，保证中文语义注释不乱码。替换点集中在 `FUALEngineMcpBridge`，未来可改为常驻 Python 服务或 DuckDB C API，不影响工具 schema 与上层契约。
 
 ## 边界之外：当前可用且已验证的部分
 

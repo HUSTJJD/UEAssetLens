@@ -25,6 +25,18 @@
 			"Name": "UEAssetLensTests",
 			"Type": "Editor",
 			"LoadingPhase": "PostEngineInit"
+		},
+		{
+			"Name": "UEAssetLensMCP",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModelContextProtocol",
+			"Enabled": true,
+			"Optional": true
 		}
 	]
 }

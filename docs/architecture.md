@@ -120,3 +120,24 @@ UE 的二进制重存（重新导入、引擎升级、Cook、序列化顺序变�
 - **可离线 / 可入 CI**：无网络、无 API Key；Commandlet 与两个门禁能在构建机上运行。
 - **可解释**：每条语义都能追溯到某个反射属性、某条边或某个数学维度，误报可定位到具体维度。
 - **代价**：语义上限由元数据质量决定。命名混乱、标签缺失、自定义属性未注册时语义会变薄；UAL 不会「看图补语义」。这是能力边界，不是缺陷掩饰。
+
+## 6. 与官方 Unreal MCP 的集成
+
+宿主源码树（UE6，`BranchName: UE6`）随附 Epic 第一方 `ModelContextProtocol` 插件（`FriendlyName: Unreal MCP`，`IsExperimentalVersion: true`，`EnabledByDefault: false`）。它在编辑器进程内提供 HTTP loopback server（`http://127.0.0.1:8000/mcp`），有完整的 `AddTool` / `OnRefreshTools` / ResourceProvider 扩展点，并可选通过 `ToolsetRegistry` 暴露数十个内置工具集。
+
+UAL 用 **`IModelContextProtocolModule::AddTool`** 把 4 个工具直接注册进该 server，而不是自定义 `UToolsetDefinition`。原因是 `ModelContextProtocolToolsetRegistryAdapter` 会把工具名限定为 `<ToolsetName>.<ToolName>`；UAL 的 4 个名称是 `PROTOCOL.md` 之外的另一份对外契约（Python stdio server、`tool_schemas.json`、生成文档三处共用），不能被改写。此外 4 个工具全部只读，不需要 Toolset 的权限分级与元工具发现机制。
+
+调用链：
+
+| 环节 | 职责 |
+| --- | --- |
+| `FUALEngineMcpTool` | `GetName` / `GetInputJsonSchema` / `GetAnnotations` / `RunAsync`；`RunAsync` 把调用丢到线程池 |
+| `FUALEngineMcpBridge` | 写 UTF-8 请求文件 → `FPlatformProcess::ExecProcess` 拉起 Python → 按 UTF-8 显式解码响应文件 |
+| `engine_bridge.py` | 白名单分派到 `ual_mcp/tools.py` 的 4 个函数，返回 TOON / YAML 文本 |
+| `.ual/index.duckdb` | 只读，与 `ual-cli`、独立 Python MCP Server 共用同一份索引 |
+
+`Server/ual_mcp/tool_schemas.json` 由 `Tools/gen_docs.py` 从 `TOOL_DEFS` 生成，是工具名、描述与 `inputSchema` 的唯一事实源；`--check` 同时保护它与 5 个生成页面，任何一侧漂移都会让 CI 失败。
+
+这形成**双通道、单一索引**：编辑器开着时 Agent 走官方 HTTP server；CI、无头构建机与无编辑器环境仍走 `ual-cli` / 独立 Python MCP。官方 server 不能替代后者——它依赖编辑器进程、仅 loopback、无认证、标记为实验性，且无法在构建机上运行 `lint-duplicates` 或 `verify-references`。
+
+边界与未验证项见 [已知限制](known-limitations.md)。

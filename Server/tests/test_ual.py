@@ -158,3 +158,32 @@ def test_cli_gates_return_expected_exit_codes(index, tmp_path):
     out = tmp_path / "shared.parquet"
     assert ual_cli.cmd_export_parquet(argparse.Namespace(index=str(index), out=str(out))) == 0
     assert out.exists() and out.stat().st_size > 0
+
+
+def test_engine_bridge_dispatches_all_four_tools(ro):
+    from ual_mcp import engine_bridge
+
+    cases = [
+        ("ual_search_assets", {"asset_class": "AnimMontage", "limit": 2}),
+        ("ual_inspect_asset", {"key": "AnimMontage:AM_Knight_HeavySlash_02"}),
+        ("ual_get_cooccurring_bundle", {"asset_path": HERO, "top_k": 2}),
+        ("ual_find_similar_assets", {"asset_path": HERO, "threshold": 0.95}),
+    ]
+    for name, arguments in cases:
+        text = engine_bridge.dispatch(ro, name, arguments)
+        assert text.startswith("# UEAssetLens"), name
+    with pytest.raises(KeyError):
+        engine_bridge.dispatch(ro, "ual_not_a_tool", {})
+
+
+def test_tool_schemas_contract_matches_python_server():
+    import json
+
+    from ual_mcp import tools as mcp_tools
+
+    schema_path = Path(__file__).resolve().parents[1] / "ual_mcp" / "tool_schemas.json"
+    payload = json.loads(schema_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "2.0"
+    assert [t["name"] for t in payload["tools"]] == list(mcp_tools.TOOL_NAMES)
+    for tool in payload["tools"]:
+        assert tool["inputSchema"]["type"] == "object"

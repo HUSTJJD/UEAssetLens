@@ -60,6 +60,7 @@ python -m mkdocs build --strict --site-dir _site
 - [ ] `verify-references` 能识别不存在的资产路径与错误的材质参数名
 - [ ] YAML 输出不含时间戳与绝对本地路径
 - [ ] `Tools/gen_docs.py --check` 无文档漂移，`mkdocs build --strict` 零警告
+- [ ] `python Server/ual_mcp/engine_bridge.py --self-test` 四项通过
 
 ## 4.1 文档站约定
 
@@ -68,6 +69,17 @@ python -m mkdocs build --strict --site-dir _site
 - 新增页面必须挂进 `mkdocs.yml` 的 `nav`，且所有相对链接要能通过 `--strict`（断链会直接让发布失败）。
 - 生成器只能用 Python 标准库 —— 文档工作流只安装 `requirements-docs.txt`，不装 DuckDB / PyYAML / MCP 运行时依赖。
 - `_site/` 与 `site/` 不入库。
+
+## 4.2 引擎内官方 MCP 约定
+
+- `Source/UEAssetLensMCP/` 只在 UE6 且启用 Epic `ModelContextProtocol` 插件时生效。模块在 `PostEngineInit` 检查模块是否已加载，未启用则只打一条 Warning，不影响 `ual-cli` 与独立 Python MCP。
+- **禁止改用 `UToolsetDefinition`**：ToolsetRegistry 会把工具名限定成 `<Toolset>.<Tool>`，破坏与 Python 侧共享的 1:1 契约。用 `IModelContextProtocolModule::AddTool`。
+- `Server/ual_mcp/tool_schemas.json` 是工具名 / 描述 / `inputSchema` 的唯一事实源，由 `Tools/gen_docs.py` 从 `TOOL_DEFS` 生成，**禁止手工编辑**。改工具签名必须同步 `stdio_server.py`、`tools.py`、生成器输出与 C++ 读取逻辑。
+- C++ 侧不引入 DuckDB C API；工具调用委托给 `engine_bridge.py` 子进程，通过 UTF-8 请求/响应文件传参（不要用 stdout，Windows 上会破坏中文注释编码）。
+- 4 个工具全部只读，`GetAnnotations()` 必须返回 `accessMode=read` / `readOnlyHint=true`。新增写操作前必须重新评估。
+- 耗时调用走 `RunAsync` + 线程池，**禁止在 game thread 上同步等 Python 进程**。
+- 每次调用启动一个 Python 进程是已知成本，不要偷偷改成常驻进程而不更新 `docs/known-limitations.md`。
+- 官方 server 是 HTTP loopback 且无认证，禁止把它暴露到非 loopback 地址。
 
 UE 侧另需 `UnrealEditor-Cmd.exe` 编译并运行 `UEAssetLensTests` 自动化用例；本仓库 CI 不假定存在 UE SDK。
 

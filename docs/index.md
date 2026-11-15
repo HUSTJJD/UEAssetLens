@@ -130,6 +130,11 @@ python -m mkdocs build --strict --site-dir _site
 | `reference/cli.md` | `ual_cli.py` argparse |
 | `reference/protocol.md` | `Server/schema/PROTOCOL.md` |
 | `agent-guide.md` | `CLAUDE.md` |
+| `Server/ual_mcp/tool_schemas.json` | `TOOL_DEFS`（供 C++ 引擎内 MCP 工具读取） |
+
+## 引擎内官方 MCP（UE6）
+
+UAL 也把同一批 4 个工具通过 `IModelContextProtocolModule::AddTool` 注册进 Epic 第一方 Unreal MCP server，形成「编辑器内 HTTP + 离线 stdio/CLI」双通道，共用一份 `.ual/index.duckdb`。选择 `AddTool` 而非 `UToolsetDefinition` 的理由、调用链与边界见[架构说明](architecture.md)。
 
 ## 导航
 

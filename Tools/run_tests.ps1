@@ -93,8 +93,9 @@ $mkdocsYml    = Join-Path $repoRoot 'mkdocs.yml'
 $generator    = Join-Path $repoRoot 'Tools/gen_docs.py'
 $testDir      = Join-Path $repoRoot 'Server/tests'
 $cliEntry     = Join-Path $repoRoot 'Server/ual_cli/ual_cli.py'
+$bridgeEntry  = Join-Path $repoRoot 'Server/ual_mcp/engine_bridge.py'
 
-foreach ($required in @($requirements, $testDir, $cliEntry)) {
+foreach ($required in @($requirements, $testDir, $cliEntry, $bridgeEntry)) {
     if (-not (Test-Path -LiteralPath $required)) {
         Write-Host ('[FAIL] missing required path: ' + $required) -ForegroundColor Red
         exit 1
@@ -185,9 +186,11 @@ try {
     Assert-ExitCode -Code $LASTEXITCODE -What 'python -m pytest Server/tests -q'
 
     # -----------------------------------------------------------------------
-    Write-Section '8/8  Running CLI self-test'
+    Write-Section '8/8  Running CLI and engine-bridge self-tests'
     & $python $cliEntry self-test
     Assert-ExitCode -Code $LASTEXITCODE -What 'ual_cli.py self-test'
+    & $python $bridgeEntry --self-test
+    Assert-ExitCode -Code $LASTEXITCODE -What 'engine_bridge.py --self-test'
 }
 catch {
     Write-Host ''

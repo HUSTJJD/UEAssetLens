@@ -26,14 +26,15 @@ UEAssetLens/
 ├─ Source/
 │  ├─ UEAssetLens/          # Runtime：UALTypes、16 维指纹数学
 │  ├─ UEAssetLensEditor/    # Editor：AssetRegistry 监听、Commandlet、IAssetExtractor、Sink
+│  ├─ UEAssetLensMCP/       # Editor：把 4 个工具注册进 Epic 官方 Unreal MCP（AddTool）
 │  └─ UEAssetLensTests/     # C++ 自动化单元测试
 ├─ Server/
 │  ├─ schema/               # init.sql、rebuild_fts.sql、PROTOCOL.md（唯一数据契约）
 │  ├─ ual_common/           # db.py / toon.py / yamlspec.py / fingerprint.py
-│  ├─ ual_mcp/              # MCP Server：4 个工具
+│  ├─ ual_mcp/              # MCP Server：4 个工具、stdio 服务、引擎内桥、工具 schema
 │  ├─ ual_cli/              # ual-cli：4 个命令 + self-test
 │  └─ tests/                # pytest 端到端测试与种子数据
-├─ Tools/                   # run_tests.ps1、setup_mcp.ps1
+├─ Tools/                   # run_tests.ps1、setup_mcp.ps1、gen_docs.py
 ├─ docs/                    # MkDocs 文档站
 ├─ CLAUDE.md                # AI 编程代理开发与自检规范
 └─ README.md
@@ -58,6 +59,9 @@ python Server/ual_cli/ual_cli.py export-parquet --out .ual/shared_catalog.parque
 
 # 4) 启动 MCP Server（stdio）
 python Server/ual_mcp/server.py --index .ual/index.duckdb
+
+# 5) 引擎内官方 MCP 的桥接自检（不需要 UE）
+python Server/ual_mcp/engine_bridge.py --self-test
 ```
 
 PowerShell 一键测试：`pwsh Tools/run_tests.ps1`；自动配置 Claude Code / Cursor：`pwsh Tools/setup_mcp.ps1 -DryRun`。
@@ -79,6 +83,44 @@ UnrealEditor-Cmd.exe Ann.uproject -run=UALIndexBuilder -Project=Ann -Out=.ual/st
 
 `filters` 支持的硬约束：`skeleton`、`duration_min`、`duration_max`、`min_forward_cm`、`max_forward_cm`、`dominant_limb`、`asset_class`。
 
+## 引擎内官方 MCP 接入（UE6 Experimental）
+
+UE6 源码树随附 Epic 第一方 `ModelContextProtocol` 插件（`FriendlyName: Unreal MCP`，Experimental，默认不启用）。UAL 通过 `Source/UEAssetLensMCP/` 把同一批 4 个工具注册进这个官方 server，形成**双通道、单一索引**：
+
+| 通道 | 场景 | 传输 |
+|---|---|---|
+| 引擎内官方 MCP | 编辑器开着，Agent 直接问资产 | HTTP `http://127.0.0.1:8000/mcp` |
+| 独立 Python MCP / `ual-cli` | CI、无编辑器、无头构建机 | stdio / CLI |
+
+**选择 `AddTool` 而非 `UToolsetDefinition`**：ToolsetRegistry 会把工具名限定为 `<ToolsetName>.<ToolName>`，破坏与 Python 侧及 `tool_schemas.json` 共享的 1:1 工具名契约；且 4 个工具全部只读，不需要 Toolset 的权限/发现机制。`IModelContextProtocolModule::AddTool` 只需依赖 `ModelContextProtocol` 一个模块。
+
+调用链：
+
+```text
+MCP client → Epic Unreal MCP (HTTP) → FUALEngineMcpTool::RunAsync (线程池)
+           → FPlatformProcess::ExecProcess → engine_bridge.py (UTF-8 请求/响应文件)
+           → ual_mcp/tools.py → 只读 .ual/index.duckdb → TOON / YAML 文本
+```
+
+**唯一事实源**：`Server/ual_mcp/tool_schemas.json` 由 `Tools/gen_docs.py` 从 `stdio_server.py` 的 `TOOL_DEFS` 生成，Python stdio server、生成文档、C++ 引擎内工具三处共用；`--check` 会拦截任何一侧漂移。
+
+启用步骤：
+
+1. 在工程中启用 `ModelContextProtocol` 插件（`UEAssetLens.uplugin` 已声明为 `Optional` 依赖），并确认 `AllToolsets` 按需启用。
+2. 先建索引：`python Server/ual_cli/ual_cli.py build --project <root>`。
+3. 启动编辑器；`UEAssetLensMCP` 在 `PostEngineInit` 自动 `AddTool`。控制台执行 `ModelContextProtocol.RefreshTools` 可热重载。
+4. 客户端连接 `http://127.0.0.1:8000/mcp`；`tools/list` 应出现 `ual_search_assets` 等 4 个工具。
+
+配置（`DefaultEditorPerProject.ini`，路径为空时用默认值）：
+
+```ini
+[/Script/UEAssetLensMCP.UALEngineMcpSettings]
+PythonExecutable=D:/learning/AnnBuildTools/Ann/Plugins/UEAssetLens/.venv/Scripts/python.exe
+IndexPath=D:/learning/AnnBuildTools/Ann/.ual/index.duckdb
+```
+
+约束与边界见 `docs/known-limitations.md`：每次工具调用启动一个 Python 子进程（百毫秒级，已用 `RunAsync` 避免阻塞 game thread）；官方 server 仅 loopback、无认证、实验性；离线 CI 门禁仍走 `ual-cli`，不依赖编辑器。
+
 ## 当前实现状态（2026-11-15）
 
 | 里程碑 | 状态 | 内容 |
@@ -86,7 +128,8 @@ UnrealEditor-Cmd.exe Ann.uproject -run=UALIndexBuilder -Project=Ann -Out=.ual/st
 | M1 存储底座与通用提取器 | **已实现** | DuckDB DDL（实测 DuckDB 2.0.0）、UE 插件三模块骨架、16 维指纹数学、`IAssetExtractor`、`FUniversalReflectionExtractor`、AssetRegistry 增量监听、无头 Commandlet、JSONL 落盘 |
 | M2 四大核心提取器 | **部分** | 指纹算法与 YAML 生成器已就绪；StaticMesh / AnimMontage / Material / Blueprint 的 UE 领域反射代码尚未全量落地 |
 | M3 图谱与 MCP Server | **已实现** | 4 个工具、TOON/YAML 唯一序列化实现、`asset_edges` 共现查询；MCP SDK 1.x/2.x 双版本兼容 |
-| M4 CI 门禁 CLI | **已实现** | 4 个命令 + `self-test` + pytest 端到端测试；UE 侧端到端联调待本地 UE5 SDK |
+| M4 CI 门禁 CLI | **已实现** | 4 个命令 + `self-test` + pytest 端到端测试；UE 侧端到端联调待本地 UE SDK |
+| M5 引擎内官方 MCP | **已实现** | `UEAssetLensMCP` 用 `AddTool` 注册 4 个工具、`engine_bridge.py` 子进程桥、`tool_schemas.json` 三端共享契约；实机联调状态见 `docs/known-limitations.md` |
 
 > 已知边界与未验证项见 `docs/known-limitations.md`。10 万级资产冷建库 <30s、增量 <1s 是设计目标，本仓库尚未提供实测基准。
 
@@ -103,8 +146,9 @@ UnrealEditor-Cmd.exe Ann.uproject -run=UALIndexBuilder -Project=Ann -Out=.ual/st
 | `docs/reference/cli.md` | `ual_cli.py` 的 argparse 定义 |
 | `docs/reference/protocol.md` | `Server/schema/PROTOCOL.md` |
 | `docs/agent-guide.md` | `CLAUDE.md` |
+| `Server/ual_mcp/tool_schemas.json` | `stdio_server.py` 的 `TOOL_DEFS`（供 C++ 引擎内 MCP 工具读取） |
 
-生成器仅依赖 Python 标准库。CI 用 `--check` 做**文档漂移门禁**：源改了但生成页没同步就会失败。
+生成器仅依赖 Python 标准库。CI 用 `--check` 做**文档漂移门禁**：源改了但生成页（或工具 schema）没同步就会失败。
 
 ```bash
 python -m pip install -r requirements-docs.txt
