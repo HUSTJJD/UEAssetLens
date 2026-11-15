@@ -57,7 +57,7 @@ python Server/ual_cli/ual_cli.py lint-duplicates --threshold 0.85
 python Server/ual_cli/ual_cli.py verify-references --scan-dirs Content/Abilities,Content/Script
 python Server/ual_cli/ual_cli.py export-parquet --out .ual/shared_catalog.parquet
 
-# 4) 启动 MCP Server（stdio）
+# 4) 启动 MCP Server（官方 SDK 2.x，stdio transport）
 python Server/ual_mcp/server.py --index .ual/index.duckdb
 
 # 5) 引擎内官方 MCP 的桥接自检（不需要 UE）
@@ -102,7 +102,7 @@ MCP client → Epic Unreal MCP (HTTP) → FUALEngineMcpTool::RunAsync (线程池
            → ual_mcp/tools.py → 只读 .ual/index.duckdb → TOON / YAML 文本
 ```
 
-**唯一事实源**：`Server/ual_mcp/tool_schemas.json` 由 `Tools/gen_docs.py` 从 `stdio_server.py` 的 `TOOL_DEFS` 生成，Python stdio server、生成文档、C++ 引擎内工具三处共用；`--check` 会拦截任何一侧漂移。
+**唯一事实源**：`Server/ual_mcp/tool_schemas.json` 由 `Tools/gen_docs.py` 从 `tools.py` 的 `TOOL_DEFS` 生成，Python MCP Server、生成文档、C++ 引擎内工具三处共用；`--check` 会同时校验 `TOOL_DEFS` 与 `server.py` 的注册函数一致，拦截任何一侧漂移。
 
 启用步骤：
 
@@ -127,7 +127,7 @@ IndexPath=D:/learning/AnnBuildTools/Ann/.ual/index.duckdb
 |---|---|---|
 | M1 存储底座与通用提取器 | **已实现** | DuckDB DDL（实测 DuckDB 2.0.0）、UE 插件三模块骨架、16 维指纹数学、`IAssetExtractor`、`FUniversalReflectionExtractor`、AssetRegistry 增量监听、无头 Commandlet、JSONL 落盘 |
 | M2 四大核心提取器 | **部分** | 指纹算法与 YAML 生成器已就绪；StaticMesh / AnimMontage / Material / Blueprint 的 UE 领域反射代码尚未全量落地 |
-| M3 图谱与 MCP Server | **已实现** | 4 个工具、TOON/YAML 唯一序列化实现、`asset_edges` 共现查询；MCP SDK 1.x/2.x 双版本兼容 |
+| M3 图谱与 MCP Server | **已实现** | 4 个工具、TOON/YAML 唯一序列化实现、`asset_edges` 共现查询；基于官方 MCP SDK 2.x（`MCPServer`），无手写协议降级 |
 | M4 CI 门禁 CLI | **已实现** | 4 个命令 + `self-test` + pytest 端到端测试；UE 侧端到端联调待本地 UE SDK |
 | M5 引擎内官方 MCP | **已实现** | `UEAssetLensMCP` 用 `AddTool` 注册 4 个工具、`engine_bridge.py` 子进程桥、`tool_schemas.json` 三端共享契约；实机联调状态见 `docs/known-limitations.md` |
 
@@ -142,11 +142,11 @@ IndexPath=D:/learning/AnnBuildTools/Ann/.ual/index.duckdb
 | 生成页 | 来源 |
 |---|---|
 | `docs/reference/schema.md` | `Server/schema/init.sql`、`rebuild_fts.sql` |
-| `docs/reference/mcp-tools.md` | `stdio_server.py` 的 `TOOL_DEFS`、`tools.py` 的字段常量 |
+| `docs/reference/mcp-tools.md` | `tools.py` 的 `TOOL_DEFS` 与字段常量 |
 | `docs/reference/cli.md` | `ual_cli.py` 的 argparse 定义 |
 | `docs/reference/protocol.md` | `Server/schema/PROTOCOL.md` |
 | `docs/agent-guide.md` | `CLAUDE.md` |
-| `Server/ual_mcp/tool_schemas.json` | `stdio_server.py` 的 `TOOL_DEFS`（供 C++ 引擎内 MCP 工具读取） |
+| `Server/ual_mcp/tool_schemas.json` | `tools.py` 的 `TOOL_DEFS`（供 C++ 引擎内 MCP 工具读取） |
 
 生成器仅依赖 Python 标准库。CI 用 `--check` 做**文档漂移门禁**：源改了但生成页（或工具 schema）没同步就会失败。
 

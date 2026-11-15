@@ -16,6 +16,60 @@ CANDIDATE_FIELDS = ["logical_id", "duration", "forward_cm", "strike_window", "li
 BUNDLE_FIELDS = ["logical_id", "asset_class", "weight", "hint"]
 SIMILAR_FIELDS = ["logical_id", "asset_class", "similarity", "shared_class"]
 
+# The single source of truth for tool names, descriptions and input schemas.
+# Tools/gen_docs.py parses this literal (stdlib-only, no imports of this module)
+# to emit tool_schemas.json for the C++ in-editor MCP frontend and the generated
+# reference docs. Keep it in sync with the @sdk.tool() signatures in server.py.
+TOOL_DEFS: list[dict[str, Any]] = [
+    {
+        "name": "ual_search_assets",
+        "description": "Multi-funnel hybrid asset retrieval; returns compact TOON candidates + co-occurring bundle.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language keywords (DuckDB FTS BM25)"},
+                "asset_class": {"type": "string", "description": "e.g. AnimMontage, NiagaraSystem, StaticMesh"},
+                "filters": {"type": "object", "description": "Hard constraints: skeleton, duration_min/max, min/max_forward_cm, dominant_limb"},
+                "domain_scope": {"type": "string", "description": "Directory whitelist, e.g. /Game/Characters/Knight"},
+                "limit": {"type": "integer", "default": 8},
+            },
+        },
+    },
+    {
+        "name": "ual_inspect_asset",
+        "description": "Deep single-asset contract with semantic annotations; returns YAML.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"key": {"type": "string", "description": "logical_id or asset_path"}},
+            "required": ["key"],
+        },
+    },
+    {
+        "name": "ual_get_cooccurring_bundle",
+        "description": "Co-occurrence graph bundle recommendation; returns TOON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "top_k": {"type": "integer", "default": 5},
+            },
+            "required": ["asset_path"],
+        },
+    },
+    {
+        "name": "ual_find_similar_assets",
+        "description": "Deterministic 16-dim fingerprint duplicate detection; returns TOON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "threshold": {"type": "number", "default": 0.85},
+            },
+            "required": ["asset_path"],
+        },
+    },
+]
+
 
 def _bundle_rows(rows: list[dict[str, Any]]) -> list[list[Any]]:
     return [[

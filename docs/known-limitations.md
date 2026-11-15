@@ -16,6 +16,7 @@
 | 10 | 白名单机制 | M4 | 仅文档约定，**尚未实现** |
 | 11 | 引擎内 MCP 依赖 UE6 实验性插件 | M5 | C++ 模块实机编译**零警告通过**；编辑器内 `tools/list` 运行时联调仍待办，见 §11 |
 | 12 | 每次工具调用启动一个 Python 进程 | M5 | 百毫秒级延迟；已用 `RunAsync` 避免阻塞 game thread，见 §12 |
+| 13 | Python MCP Server 硬依赖官方 SDK 2.x | M3 | 无手写协议降级；SDK 缺失即报错退出，离线环境走 `ual-cli`，见 §13 |
 
 ---
 
@@ -88,6 +89,16 @@ DuckDB FTS 不随 `INSERT` 自动更新。`ual-cli build` 每次灌库后调用 
 **影响**：交互式 Ask 的体感延迟高于常驻进程方案；高频批量调用（例如一次会话几十次检索）成本明显。
 
 **当前缓解**：`FUALEngineMcpTool::RunAsync` 把调用放到线程池，不阻塞编辑器 game thread；请求/响应走文件而非 stdout，保证中文语义注释不乱码。替换点集中在 `FUALEngineMcpBridge`，未来可改为常驻 Python 服务或 DuckDB C API，不影响工具 schema 与上层契约。
+
+## 13. Python MCP Server 硬依赖官方 SDK 2.x
+
+**现象**：`Server/ual_mcp/server.py` 只从 `mcp.server.mcpserver` 导入 `MCPServer`，`requirements.txt` 固定为 `mcp>=2,<3`。仓库早期曾附带一个手写的 `stdio_server.py`（仅实现 `initialize` / `ping` / `tools/list` / `tools/call`，协议版本写死 `2024-11-05`），现已删除。
+
+**影响**：未安装或安装了 1.x SDK 的环境无法启动 Python MCP Server，进程打印可读错误并以退出码 2 结束。离线/受限环境不再有"能跑但语义不完整"的第三条路径。
+
+**决策依据**：手写实现缺少 resources / prompts / 分页 / 协议版本协商，而官方 SDK v2 已能同时服务 2025 与 2026 两代协议修订；维护第三套协议语义的收益低于风险。工具名、描述与 `inputSchema` 的唯一事实源已迁至 `tools.py::TOOL_DEFS`，由 `gen_docs.py` 生成 `tool_schemas.json` 供 C++ 引擎内工具使用，并校验与 `server.py` 注册函数一致。
+
+**当前缓解**：无 SDK 的离线/CI 场景本来就走 `ual-cli`（`build` / `lint-duplicates` / `verify-references` / `export-parquet`），不依赖 MCP；`ual_mcp/server.py --self-test` 也不导入 SDK，可在纯 DuckDB 环境验证 4 个工具的输出。
 
 ## 边界之外：当前可用且已验证的部分
 

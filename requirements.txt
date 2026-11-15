@@ -2,9 +2,9 @@
 # DuckDB >= 1.1 is required for array_cosine_similarity(); verified on 2.0.0.
 duckdb>=1.1,<3
 PyYAML>=6.0
-# MCP SDK: 1.x exposes FastMCP, 2.x exposes MCPServer.
-# Server/ual_mcp/server.py supports both and has a dependency-free stdio fallback.
-mcp>=1.0
+# MCP SDK 2.x only. In v2 the high-level server class is MCPServer
+# (FastMCP was renamed); server.py has no protocol fallback.
+mcp>=2,<3
 
 # Development / CI
 pytest>=8.0

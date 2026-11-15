@@ -125,7 +125,7 @@ UE 的二进制重存（重新导入、引擎升级、Cook、序列化顺序变�
 
 宿主源码树（UE6，`BranchName: UE6`）随附 Epic 第一方 `ModelContextProtocol` 插件（`FriendlyName: Unreal MCP`，`IsExperimentalVersion: true`，`EnabledByDefault: false`）。它在编辑器进程内提供 HTTP loopback server（`http://127.0.0.1:8000/mcp`），有完整的 `AddTool` / `OnRefreshTools` / ResourceProvider 扩展点，并可选通过 `ToolsetRegistry` 暴露数十个内置工具集。
 
-UAL 用 **`IModelContextProtocolModule::AddTool`** 把 4 个工具直接注册进该 server，而不是自定义 `UToolsetDefinition`。原因是 `ModelContextProtocolToolsetRegistryAdapter` 会把工具名限定为 `<ToolsetName>.<ToolName>`；UAL 的 4 个名称是 `PROTOCOL.md` 之外的另一份对外契约（Python stdio server、`tool_schemas.json`、生成文档三处共用），不能被改写。此外 4 个工具全部只读，不需要 Toolset 的权限分级与元工具发现机制。
+UAL 用 **`IModelContextProtocolModule::AddTool`** 把 4 个工具直接注册进该 server，而不是自定义 `UToolsetDefinition`。原因是 `ModelContextProtocolToolsetRegistryAdapter` 会把工具名限定为 `<ToolsetName>.<ToolName>`；UAL 的 4 个名称是 `PROTOCOL.md` 之外的另一份对外契约（Python MCP Server、`tool_schemas.json`、生成文档三处共用），不能被改写。此外 4 个工具全部只读，不需要 Toolset 的权限分级与元工具发现机制。
 
 调用链：
 

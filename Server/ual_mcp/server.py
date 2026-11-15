@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """UEAssetLens MCP Server entry point.
 
-Compatibility order:
-  1. mcp 1.x  -> FastMCP
-  2. mcp 2.x  -> MCPServer (FastMCP was renamed)
-  3. none     -> dependency-free stdio JSON-RPC fallback (stdio_server.py)
+Requires the official MCP Python SDK 2.x (`mcp>=2,<3`). In v2 the high-level
+server class is `MCPServer` (v1's `FastMCP` was renamed). There is deliberately
+no hand-written protocol fallback: a missing or incompatible SDK fails loudly
+instead of silently serving a partial MCP implementation.
 
 Usage:
   python Server/ual_mcp/server.py --index .ual/index.duckdb
@@ -27,22 +27,19 @@ if str(SERVER_ROOT) not in sys.path:
 
 from ual_common import db  # noqa: E402
 from ual_mcp import tools  # noqa: E402
-from ual_mcp.stdio_server import serve_stdio  # noqa: E402
 
 HERO = "/Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02"
 
 
 def _create_sdk_server():
     try:
-        from mcp.server.fastmcp import FastMCP  # mcp 1.x
-        return FastMCP("ueassetlens"), "mcp1"
-    except ImportError:
-        pass
-    try:
-        from mcp.server.mcpserver import MCPServer  # mcp 2.x
-        return MCPServer("ueassetlens"), "mcp2"
-    except ImportError:
-        return None, None
+        from mcp.server.mcpserver import MCPServer
+    except ImportError as exc:
+        raise RuntimeError(
+            "The official MCP SDK 2.x is required (mcp>=2,<3). "
+            "Install it with `python -m pip install -r requirements.txt`."
+        ) from exc
+    return MCPServer("ueassetlens")
 
 
 def _register(sdk: Any, con: duckdb.DuckDBPyConnection) -> None:
@@ -74,19 +71,9 @@ def _register(sdk: Any, con: duckdb.DuckDBPyConnection) -> None:
 
 
 def run_server(con: duckdb.DuckDBPyConnection) -> None:
-    sdk, flavor = _create_sdk_server()
-    if sdk is not None:
-        try:
-            _register(sdk, con)
-        except Exception as exc:
-            sys.stderr.write(f"[ual] SDK tool registration failed ({exc}); using stdio fallback\n")
-        else:
-            if flavor == "mcp1":
-                sdk.run(transport="stdio")
-            else:
-                asyncio.run(sdk.run_stdio_async())
-            return
-    serve_stdio(con)
+    sdk = _create_sdk_server()
+    _register(sdk, con)
+    asyncio.run(sdk.run_stdio_async())
 
 
 def self_test() -> int:
@@ -127,6 +114,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         run_server(con)
+    except Exception as exc:
+        print(f"[ual] MCP server failed to start: {exc}", file=sys.stderr)
+        return 2
     finally:
         con.close()
     return 0

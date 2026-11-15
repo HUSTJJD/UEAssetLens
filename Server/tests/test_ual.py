@@ -187,3 +187,19 @@ def test_tool_schemas_contract_matches_python_server():
     assert [t["name"] for t in payload["tools"]] == list(mcp_tools.TOOL_NAMES)
     for tool in payload["tools"]:
         assert tool["inputSchema"]["type"] == "object"
+
+
+def test_server_tool_schemas_match_tool_defs(ro):
+    """The SDK-generated schemas must stay aligned with the shared TOOL_DEFS."""
+    import asyncio
+
+    from ual_mcp import server, tools as mcp_tools
+
+    sdk = server._create_sdk_server()
+    server._register(sdk, ro)
+    generated = {tool.name: tool.input_schema for tool in asyncio.run(sdk.list_tools())}
+    assert set(generated) == set(mcp_tools.TOOL_NAMES)
+    for tool in mcp_tools.TOOL_DEFS:
+        declared = set(tool["inputSchema"].get("properties", {}))
+        actual = set(generated[tool["name"]].get("properties", {}))
+        assert declared == actual, tool["name"]

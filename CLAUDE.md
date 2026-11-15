@@ -74,7 +74,8 @@ python -m mkdocs build --strict --site-dir _site
 
 - `Source/UEAssetLensMCP/` 只在 UE6 且启用 Epic `ModelContextProtocol` 插件时生效。模块在 `PostEngineInit` 检查模块是否已加载，未启用则只打一条 Warning，不影响 `ual-cli` 与独立 Python MCP。
 - **禁止改用 `UToolsetDefinition`**：ToolsetRegistry 会把工具名限定成 `<Toolset>.<Tool>`，破坏与 Python 侧共享的 1:1 契约。用 `IModelContextProtocolModule::AddTool`。
-- `Server/ual_mcp/tool_schemas.json` 是工具名 / 描述 / `inputSchema` 的唯一事实源，由 `Tools/gen_docs.py` 从 `TOOL_DEFS` 生成，**禁止手工编辑**。改工具签名必须同步 `stdio_server.py`、`tools.py`、生成器输出与 C++ 读取逻辑。
+- `Server/ual_mcp/tool_schemas.json` 是工具名 / 描述 / `inputSchema` 的唯一事实源，由 `Tools/gen_docs.py` 从 `tools.py` 的 `TOOL_DEFS` 生成，**禁止手工编辑**。改工具签名必须同步 `TOOL_DEFS`、`server.py` 的 `@sdk.tool()` 签名与生成器输出；`gen_docs.py --check` 会比对两者并拦截漂移。
+- Python MCP Server **只支持官方 MCP SDK 2.x**（`mcp>=2,<3`，v2 中 `FastMCP` 已更名 `MCPServer`）。禁止重新引入手写 JSON-RPC 协议层；SDK 缺失或不兼容时明确报错退出，不静默降级。
 - C++ 侧不引入 DuckDB C API；工具调用委托给 `engine_bridge.py` 子进程，通过 UTF-8 请求/响应文件传参（不要用 stdout，Windows 上会破坏中文注释编码）。
 - 4 个工具全部只读，`GetAnnotations()` 必须返回 `accessMode=read` / `readOnlyHint=true`。新增写操作前必须重新评估。
 - 耗时调用走 `RunAsync` + 线程池，**禁止在 game thread 上同步等 Python 进程**。

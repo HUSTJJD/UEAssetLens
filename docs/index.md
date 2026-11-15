@@ -76,7 +76,7 @@ MCP Server 使用 **stdio** 传输，通常由客户端按配置自动拉起：
 python Server/ual_mcp/server.py --index .ual/index.duckdb
 ```
 
-支持 MCP SDK 1.x（`FastMCP`）、2.x（`MCPServer`）以及无 SDK 时的纯 stdio JSON-RPC 降级。
+Python MCP Server 只依赖官方 MCP SDK **2.x**（`mcp>=2,<3`；v2 中 `FastMCP` 已更名 `MCPServer`）。SDK 缺失或不兼容时明确报错退出（退出码 2），不提供手写协议降级；无 SDK 的离线环境请直接用 `ual-cli`。
 
 ### 配置 Claude Code / Cursor
 
