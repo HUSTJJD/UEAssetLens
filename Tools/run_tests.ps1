@@ -1,29 +1,35 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Run the UEAssetLens (UAL) test suite and the CLI self-test.
+    Run the UEAssetLens (UAL) test suite, regenerate reference docs, and build
+    the MkDocs site in strict mode.
 
 .DESCRIPTION
     Locates the repository root, prepares a local virtual environment
-    (unless -SkipVenv is supplied), installs dependencies from
-    requirements.txt, runs pytest against Server/tests, and finally runs
-    the CLI self-test. Any failed step aborts the run with a non-zero exit
-    code. Output is grouped into labelled sections.
+    (unless -SkipVenv is supplied), installs runtime and docs dependencies,
+    regenerates the auto-generated reference pages, builds the documentation
+    site with --strict, runs pytest, and finally runs the CLI self-test.
+    Any failed step aborts the run with a non-zero exit code.
 
 .PARAMETER SkipVenv
-    Do not create or reuse a local .venv; use the interpreter on PATH (or
-    the already-activated environment) instead. Dependency installation
-    still runs so that the chosen environment is complete.
+    Do not create or reuse a local .venv; use the interpreter on PATH (or the
+    already-activated environment) instead. Dependency installation still runs.
+
+.PARAMETER SkipDocs
+    Skip docs dependency install, reference generation, and the strict site
+    build. Useful when mkdocs-material is not available locally. CI never uses
+    this switch.
 
 .EXAMPLE
     pwsh -File Tools/run_tests.ps1
 
 .EXAMPLE
-    pwsh -File Tools/run_tests.ps1 -SkipVenv
+    pwsh -File Tools/run_tests.ps1 -SkipVenv -SkipDocs
 #>
 [CmdletBinding()]
 param(
-    [switch]$SkipVenv
+    [switch]$SkipVenv,
+    [switch]$SkipDocs
 )
 
 $ErrorActionPreference = 'Stop'
@@ -65,6 +71,7 @@ function Resolve-RepoRoot {
     $dir = $PSScriptRoot
     for ($i = 0; $i -lt 6; $i++) {
         if ((Test-Path -LiteralPath (Join-Path $dir 'requirements.txt')) -and
+            (Test-Path -LiteralPath (Join-Path $dir 'mkdocs.yml')) -and
             (Test-Path -LiteralPath (Join-Path $dir 'Server'))) {
             return (Resolve-Path -LiteralPath $dir).Path
         }
@@ -76,32 +83,37 @@ function Resolve-RepoRoot {
 }
 
 # ---------------------------------------------------------------------------
-Write-Section '1/5  Locating repository root'
+Write-Section '1/8  Locating repository root'
 $repoRoot = Resolve-RepoRoot
 Write-Step ('RepoRoot    : ' + $repoRoot)
 
 $requirements = Join-Path $repoRoot 'requirements.txt'
+$docsReqs     = Join-Path $repoRoot 'requirements-docs.txt'
+$mkdocsYml    = Join-Path $repoRoot 'mkdocs.yml'
+$generator    = Join-Path $repoRoot 'Tools/gen_docs.py'
 $testDir      = Join-Path $repoRoot 'Server/tests'
 $cliEntry     = Join-Path $repoRoot 'Server/ual_cli/ual_cli.py'
 
-if (-not (Test-Path -LiteralPath $requirements)) {
-    Write-Host ('[FAIL] requirements.txt not found at ' + $requirements) -ForegroundColor Red
-    exit 1
+foreach ($required in @($requirements, $testDir, $cliEntry)) {
+    if (-not (Test-Path -LiteralPath $required)) {
+        Write-Host ('[FAIL] missing required path: ' + $required) -ForegroundColor Red
+        exit 1
+    }
 }
-if (-not (Test-Path -LiteralPath $testDir)) {
-    Write-Host ('[FAIL] Server/tests not found at ' + $testDir) -ForegroundColor Red
-    exit 1
-}
-if (-not (Test-Path -LiteralPath $cliEntry)) {
-    Write-Host ('[FAIL] ual_cli.py not found at ' + $cliEntry) -ForegroundColor Red
-    exit 1
+if (-not $SkipDocs) {
+    foreach ($required in @($docsReqs, $mkdocsYml, $generator)) {
+        if (-not (Test-Path -LiteralPath $required)) {
+            Write-Host ('[FAIL] missing docs path: ' + $required) -ForegroundColor Red
+            exit 1
+        }
+    }
 }
 
 Push-Location -LiteralPath $repoRoot
 $overallOk = $true
 try {
     # -----------------------------------------------------------------------
-    Write-Section '2/5  Preparing Python environment'
+    Write-Section '2/8  Preparing Python environment'
     if ($SkipVenv) {
         Write-Step '-SkipVenv: using interpreter from PATH / active environment.'
         $python = Get-BasePython
@@ -131,17 +143,49 @@ try {
     Write-Step ('Interpreter : ' + $python)
 
     # -----------------------------------------------------------------------
-    Write-Section '3/5  Installing dependencies'
+    Write-Section '3/8  Installing runtime dependencies'
     & $python -m pip install -r $requirements
     Assert-ExitCode -Code $LASTEXITCODE -What 'pip install -r requirements.txt'
 
     # -----------------------------------------------------------------------
-    Write-Section '4/5  Running pytest (Server/tests)'
+    Write-Section '4/8  Installing documentation dependencies'
+    if ($SkipDocs) {
+        Write-Step '-SkipDocs: skipping MkDocs toolchain install.'
+    }
+    else {
+        & $python -m pip install -r $docsReqs
+        Assert-ExitCode -Code $LASTEXITCODE -What 'pip install -r requirements-docs.txt'
+    }
+
+    # -----------------------------------------------------------------------
+    Write-Section '5/8  Generating API reference'
+    if ($SkipDocs) {
+        Write-Step '-SkipDocs: skipping reference generation.'
+    }
+    else {
+        & $python $generator
+        Assert-ExitCode -Code $LASTEXITCODE -What 'Tools/gen_docs.py'
+        & $python $generator --check
+        Assert-ExitCode -Code $LASTEXITCODE -What 'Tools/gen_docs.py --check'
+    }
+
+    # -----------------------------------------------------------------------
+    Write-Section '6/8  Building documentation site (strict)'
+    if ($SkipDocs) {
+        Write-Step '-SkipDocs: skipping mkdocs build --strict.'
+    }
+    else {
+        & $python -m mkdocs build --strict --site-dir _site
+        Assert-ExitCode -Code $LASTEXITCODE -What 'mkdocs build --strict'
+    }
+
+    # -----------------------------------------------------------------------
+    Write-Section '7/8  Running pytest (Server/tests)'
     & $python -m pytest $testDir -q
     Assert-ExitCode -Code $LASTEXITCODE -What 'python -m pytest Server/tests -q'
 
     # -----------------------------------------------------------------------
-    Write-Section '5/5  Running CLI self-test'
+    Write-Section '8/8  Running CLI self-test'
     & $python $cliEntry self-test
     Assert-ExitCode -Code $LASTEXITCODE -What 'ual_cli.py self-test'
 }
@@ -161,5 +205,5 @@ if (-not $overallOk) {
     exit 1
 }
 Write-Section 'RESULT: ALL CHECKS PASSED'
-Write-Host 'pytest and the CLI self-test both completed successfully.' -ForegroundColor Green
+Write-Host 'Docs generation, strict site build, pytest and CLI self-test succeeded.' -ForegroundColor Green
 exit 0

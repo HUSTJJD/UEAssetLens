@@ -27,6 +27,10 @@ __pycache__/
 # WorkBuddy local workspace data
 .workbuddy/
 
+# MkDocs build output
+_site/
+site/
+
 # OS
 Thumbs.db
 .DS_Store

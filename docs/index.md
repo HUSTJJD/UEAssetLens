@@ -113,8 +113,31 @@ pwsh -File Tools/setup_mcp.ps1
 
 `filters` 支持 `skeleton`、`duration_min/max`、`min/max_forward_cm`、`dominant_limb`。
 
+## 文档站与自动生成
+
+本站由 MkDocs Material 构建，推送到 `main` 后由 `.github/workflows/docs.yml` 自动生成并发布到 GitHub Pages。参考页由 `Tools/gen_docs.py` 从源码生成，**不要手工编辑**；CI 用 `--check` 拦截「源码已改、文档未同步」的漂移。
+
+```bash
+python Tools/gen_docs.py
+python Tools/gen_docs.py --check
+python -m mkdocs build --strict --site-dir _site
+```
+
+| 生成页 | 来源 |
+| --- | --- |
+| `reference/schema.md` | `Server/schema/init.sql`、`rebuild_fts.sql` |
+| `reference/mcp-tools.md` | `TOOL_DEFS` + TOON 字段常量 |
+| `reference/cli.md` | `ual_cli.py` argparse |
+| `reference/protocol.md` | `Server/schema/PROTOCOL.md` |
+| `agent-guide.md` | `CLAUDE.md` |
+
 ## 导航
 
 - [架构说明](architecture.md)：采集层、DuckDB 表结构、16 维指纹与误报边界、零 VLM 红线
 - [CI 门禁](ci-gates.md)：`lint-duplicates` / `verify-references` 接入与白名单约定
 - [已知限制](known-limitations.md)：当前实现边界与尚未验证的性能目标
+- [三层数据协议](reference/protocol.md)：DuckDB / YAML / TOON 唯一契约（自动生成）
+- [DuckDB 存储参考](reference/schema.md)：DDL 结构化投影（自动生成）
+- [MCP 工具参考](reference/mcp-tools.md)：4 个工具入参与 TOON 字段顺序（自动生成）
+- [ual-cli 命令参考](reference/cli.md)：命令、参数与退出码（自动生成）
+- [开发规范](agent-guide.md)：AI 代理自检清单与文档约定（自动生成）

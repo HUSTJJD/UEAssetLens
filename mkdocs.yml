@@ -1,0 +1,90 @@
+site_name: UEAssetLens
+site_description: 零 VLM 依赖的 Unreal Engine 确定性资产语义索引、防重复检测与 AI Agent (MCP) 检索中枢
+site_url: https://hustjjd.github.io/UEAssetLens/
+repo_url: https://github.com/HUSTJJD/UEAssetLens
+repo_name: HUSTJJD/UEAssetLens
+edit_uri: blob/main/docs/
+docs_dir: docs
+
+theme:
+  name: material
+  language: zh
+  logo: assets/ual.svg
+  favicon: assets/ual.svg
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - search.highlight
+    - search.suggest
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: 切换到暗色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: 切换到亮色模式
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/HUSTJJD/UEAssetLens
+      name: GitHub
+
+nav:
+  - 首页: index.md
+  - 架构与治理:
+      - 架构说明: architecture.md
+      - CI 门禁: ci-gates.md
+      - 已知限制: known-limitations.md
+  - 参考（自动生成）:
+      - 三层数据协议: reference/protocol.md
+      - DuckDB 存储参考: reference/schema.md
+      - MCP 工具参考: reference/mcp-tools.md
+      - ual-cli 命令参考: reference/cli.md
+  - 开发规范: agent-guide.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - meta
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+
+copyright: Copyright &copy; HUSTJJD · UEAssetLens v2.0

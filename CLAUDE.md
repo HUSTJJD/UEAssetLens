@@ -45,6 +45,9 @@
 ```bash
 python -m pytest Server/tests -q
 python Server/ual_cli/ual_cli.py self-test
+python Tools/gen_docs.py            # 同步生成参考页
+python Tools/gen_docs.py --check    # 漂移门禁
+python -m mkdocs build --strict --site-dir _site
 ```
 
 必须全部通过，且覆盖：
@@ -56,6 +59,15 @@ python Server/ual_cli/ual_cli.py self-test
 - [ ] 余弦自连接能命中阈值并返回非零退出码
 - [ ] `verify-references` 能识别不存在的资产路径与错误的材质参数名
 - [ ] YAML 输出不含时间戳与绝对本地路径
+- [ ] `Tools/gen_docs.py --check` 无文档漂移，`mkdocs build --strict` 零警告
+
+## 4.1 文档站约定
+
+- 站点配置在 `mkdocs.yml`，源文件在 `docs/`；发布工作流是 `.github/workflows/docs.yml`（`main` 分支 + 官方 Pages 部署），Pages Source 必须设为 `GitHub Actions`。
+- `docs/reference/*.md` 与 `docs/agent-guide.md` 由 `Tools/gen_docs.py` 生成，**禁止手工编辑**。修改 `init.sql` / `PROTOCOL.md` / `TOOL_DEFS` / argparse / `CLAUDE.md` 后必须重跑生成器并提交结果，否则 CI 的 `--check` 会失败。
+- 新增页面必须挂进 `mkdocs.yml` 的 `nav`，且所有相对链接要能通过 `--strict`（断链会直接让发布失败）。
+- 生成器只能用 Python 标准库 —— 文档工作流只安装 `requirements-docs.txt`，不装 DuckDB / PyYAML / MCP 运行时依赖。
+- `_site/` 与 `site/` 不入库。
 
 UE 侧另需 `UnrealEditor-Cmd.exe` 编译并运行 `UEAssetLensTests` 自动化用例；本仓库 CI 不假定存在 UE SDK。
 

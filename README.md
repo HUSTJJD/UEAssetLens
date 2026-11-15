@@ -1,6 +1,11 @@
 # UEAssetLens (UAL)
 
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-3F51B5?style=for-the-badge)](https://hustjjd.github.io/UEAssetLens/)
+[![Docs Build](https://github.com/HUSTJJD/UEAssetLens/actions/workflows/docs.yml/badge.svg)](https://github.com/HUSTJJD/UEAssetLens/actions/workflows/docs.yml)
+
 > 零多模态大模型依赖的 Unreal Engine 确定性资产语义索引、防重复检测与 AI Agent（MCP）检索中枢。
+
+**文档站**：<https://hustjjd.github.io/UEAssetLens/>（由 GitHub Actions 自动构建发布）
 
 二进制资产黑盒 → 确定性数学/拓扑提取 → **DuckDB + YAML + TOON** 三层数据流转 → 双向服务于人类美术防重入库与 AI Agent 零幻觉装配。
 
@@ -85,9 +90,35 @@ UnrealEditor-Cmd.exe Ann.uproject -run=UALIndexBuilder -Project=Ann -Out=.ual/st
 
 > 已知边界与未验证项见 `docs/known-limitations.md`。10 万级资产冷建库 <30s、增量 <1s 是设计目标，本仓库尚未提供实测基准。
 
+## 文档站与自动生成
+
+文档站使用 **MkDocs Material**，配置见 `mkdocs.yml`，源文件在 `docs/`。推送到 `main` 且命中 `docs/**`、`mkdocs.yml`、`Tools/gen_docs.py` 或参考源（`Server/schema/`、`Server/ual_mcp/`、`Server/ual_cli/`、`CLAUDE.md`）时，`.github/workflows/docs.yml` 自动构建并通过 GitHub Actions 官方 Pages 流程发布。
+
+参考页由 `Tools/gen_docs.py` **从源码生成**，不要手工编辑：
+
+| 生成页 | 来源 |
+|---|---|
+| `docs/reference/schema.md` | `Server/schema/init.sql`、`rebuild_fts.sql` |
+| `docs/reference/mcp-tools.md` | `stdio_server.py` 的 `TOOL_DEFS`、`tools.py` 的字段常量 |
+| `docs/reference/cli.md` | `ual_cli.py` 的 argparse 定义 |
+| `docs/reference/protocol.md` | `Server/schema/PROTOCOL.md` |
+| `docs/agent-guide.md` | `CLAUDE.md` |
+
+生成器仅依赖 Python 标准库。CI 用 `--check` 做**文档漂移门禁**：源改了但生成页没同步就会失败。
+
+```bash
+python -m pip install -r requirements-docs.txt
+python Tools/gen_docs.py                       # 重新生成
+python Tools/gen_docs.py --check              # 校验是否过期
+python -m mkdocs build --strict --site-dir _site   # 本地严格构建
+pwsh -File Tools/run_tests.ps1                # 一键：生成 + 严格构建 + pytest + CLI 自检
+```
+
+> 首次使用需在仓库 Settings → Pages 把 **Source** 设为 `GitHub Actions`；工作流本身不需要 `gh-pages` 分支。`-SkipDocs` 可在未安装文档工具链时只跑 Python 测试。
+
 ## 数据契约
 
-`Server/schema/PROTOCOL.md` 是唯一权威。字段变更必须同步 `init.sql`、`Source/UEAssetLens/Public/UALTypes.h`、`Server/ual_common/db.py` 并递增协议版本。
+`Server/schema/PROTOCOL.md` 是唯一权威。字段变更必须同步 `init.sql`、`Source/UEAssetLens/Public/UALTypes.h`、`Server/ual_common/db.py` 并递增协议版本；随后运行 `python Tools/gen_docs.py` 同步生成页。
 
 ## 许可
 

@@ -1,0 +1,69 @@
+name: Documentation
+
+# GitHub Actions only generates/builds/publishes the documentation site.
+# Unreal Engine is far too large for a hosted runner: C++ compilation and
+# automation tests stay local (Tools/run_tests.ps1). Do not add code-checking
+# jobs to this workflow.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - "Tools/gen_docs.py"
+      - "Server/schema/**"
+      - "Server/ual_mcp/**"
+      - "Server/ual_cli/**"
+      - "CLAUDE.md"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install MkDocs toolchain
+        run: pip install -r requirements-docs.txt
+      - name: Verify generated reference is up to date
+        # The generator is stdlib-only; --check fails when a source-of-truth
+        # file changed but docs/reference/*.md was not regenerated.
+        run: python Tools/gen_docs.py --check
+      - name: Build docs
+        # --strict turns warnings into a build failure, which is the only way a
+        # broken internal link gets noticed before it is on the site.
+        run: mkdocs build --strict --site-dir _site
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
