@@ -57,7 +57,7 @@ namespace
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUALFingerprintDimTest,
 	"UEAssetLens.Fingerprint.Dimensions",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 
 bool FUALFingerprintDimTest::RunTest(const FString& Parameters)
 {
@@ -101,7 +101,7 @@ bool FUALFingerprintDimTest::RunTest(const FString& Parameters)
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUALFingerprintNoNaNTest,
 	"UEAssetLens.Fingerprint.NoNaN",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 
 bool FUALFingerprintNoNaNTest::RunTest(const FString& Parameters)
 {
@@ -142,7 +142,7 @@ bool FUALFingerprintNoNaNTest::RunTest(const FString& Parameters)
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUALFingerprintSelfSimilarityTest,
 	"UEAssetLens.Fingerprint.SelfSimilarity",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 
 bool FUALFingerprintSelfSimilarityTest::RunTest(const FString& Parameters)
 {
@@ -164,7 +164,7 @@ bool FUALFingerprintSelfSimilarityTest::RunTest(const FString& Parameters)
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUALFingerprintRotationInvarianceTest,
 	"UEAssetLens.Fingerprint.RotationInvariance",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 
 bool FUALFingerprintRotationInvarianceTest::RunTest(const FString& Parameters)
 {
@@ -208,7 +208,7 @@ bool FUALFingerprintRotationInvarianceTest::RunTest(const FString& Parameters)
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUALFingerprintDurationTest,
 	"UEAssetLens.Fingerprint.DifferentDuration",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 
 bool FUALFingerprintDurationTest::RunTest(const FString& Parameters)
 {

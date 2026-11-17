@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "root": "Asset",
+  "fallback": "Misc",
+  "case_sensitive": true,
+  "_comment": "Single source of truth for asset taxonomy. Ordered: the FIRST family whose match substrings appear in the asset class wins. Python (ual_common/taxonomy.py) and C++ (UALTaxonomyRules.h, produced by Tools/gen_taxonomy.py) both read this file. Adding a new UE asset type family only requires an entry here, then regenerating the C++ header.",
+  "families": [
+    {"name": "Texture", "match": ["Texture", "RenderTarget", "Cubemap", "CubeMap", "LightMap", "ShadowMap", "VolumeTexture", "TextureAtlas"]},
+    {"name": "Material", "match": ["Material", "SubsurfaceProfile", "MaterialParameterCollection"]},
+    {"name": "Animation", "match": ["Anim", "BlendSpace", "Montage", "Skeleton", "AimOffset", "PoseAsset", "ControlRig", "IKRig", "IKRetargeter", "MotionWarping", "PoseSearch"]},
+    {"name": "Mesh", "match": ["Mesh", "Nanite", "Skeletal", "StaticMesh"]},
+    {"name": "Audio", "match": ["Sound", "Audio", "MetaSound", "Reverb", "Submix", "SoundWave"]},
+    {"name": "Blueprint", "match": ["Blueprint"]},
+    {"name": "UI", "match": ["Widget", "UMG", "Slate", "RichTextBlock"]},
+    {"name": "VFX", "match": ["Niagara", "Particle", "Cascade"]},
+    {"name": "Data", "match": ["DataAsset", "DataTable", "Curve", "CurveTable", "CompositeDataTable"]},
+    {"name": "Cinematic", "match": ["LevelSequence", "MovieScene", "Sequencer", "CameraShake", "CameraAsset", "TemplateSequence"]},
+    {"name": "Physics", "match": ["PhysicsAsset", "PhysicalMaterial", "Chaos", "Cloth", "Destructible", "GeometryCollection", "BodySetup", "ConstraintProfile"]},
+    {"name": "AI", "match": ["BehaviorTree", "Blackboard", "StateTree", "EnvironmentQuery", "EQS", "Perception", "SmartObject", "NavLink"]},
+    {"name": "Gameplay", "match": ["GameplayAbility", "GameplayEffect", "AttributeSet", "AbilitySystem", "GameMode", "GameState", "PlayerController", "InputAction", "InputMapping", "EnhancedInput", "Experience"]},
+    {"name": "PCG", "match": ["PCG", "Procedural"]},
+    {"name": "Groom", "match": ["Groom", "Hair", "Strands"]},
+    {"name": "Geometry", "match": ["GeometryCache", "GeometryScript", "DynamicMesh"]},
+    {"name": "Media", "match": ["MediaPlayer", "MediaSource", "MediaPlaylist", "MediaComponent"]},
+    {"name": "World", "match": ["World", "Map", "Level", "Landscape", "Foliage", "NavMesh", "Navigation", "DataLayer", "HLOD", "Lightmass", "WorldPartition", "Streaming"]},
+    {"name": "Text", "match": ["Font", "StringTable", "Text", "Localization", "RichText", "Polyglot"]},
+    {"name": "Rendering", "match": ["ReflectionCapture", "PostProcess", "Decal", "LensFlare", "SkyAtmosphere", "Volumetric", "LightFunction", "ColorGrading"]},
+    {"name": "Editor", "match": ["EditorUtility", "DeveloperSettings", "ToolMenu", "AssetAction", "EditorSettings"]},
+    {"name": "Network", "match": ["Network", "Replication", "NetCore", "Iris", "OnlineSession"]},
+    {"name": "Scripting", "match": ["Lua", "UnLua", "Script", "PythonScript"]},
+    {"name": "Verse", "match": ["Verse"]}
+  ]
+}

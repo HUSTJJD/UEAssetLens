@@ -14,7 +14,7 @@
 //   * 长度不足补零、超长截断；零向量返回全零；全程除零保护；不产生 NaN/Inf。
 //   * 不加载任何 UObject / 贴图 / 网格，仅做纯数值运算。
 // ---------------------------------------------------------------------------
-struct FUALFingerprint
+struct UEASSETLENS_API FUALFingerprint
 {
 	// 指纹维度，固定为 16（与 DuckDB fingerprint_vec FLOAT[16] 对齐）。
 	static constexpr int32 Dim = 16;

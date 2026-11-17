@@ -17,6 +17,7 @@
 | 11 | 引擎内 MCP 依赖 UE6 实验性插件 | M5 | C++ 模块实机编译**零警告通过**；编辑器内 `tools/list` 运行时联调仍待办，见 §11 |
 | 12 | 每次工具调用启动一个 Python 进程 | M5 | 百毫秒级延迟；已用 `RunAsync` 避免阻塞 game thread，见 §12 |
 | 13 | Python MCP Server 硬依赖官方 SDK 2.x | M3 | 无手写协议降级；SDK 缺失即报错退出，离线环境走 `ual-cli`，见 §13 |
+| 14 | 全类型覆盖改造的 C++ 部分未经编译验证 | M1+ | pytest 44 项、CLI self-test 通过；C++ 仅静态审查，需本地 UE6 SDK 编译，见 §14 |
 
 ---
 
@@ -31,6 +32,8 @@
 ## 3. 领域提取器 M2 未全量实现
 
 `FUniversalReflectionExtractor` 覆盖 100% UObject，但 StaticMesh 顶点径向直方图、AnimMontage 动能相位切分、Material 参数聚类、Blueprint/DataTable 领域字段的 UE 反射代码尚未全量落地。Python 侧 `fingerprint.py` 与 `yamlspec.py` 已实现对应算法，种子数据即用它们生成，因此服务端链路可完整验证；UE 端到端产出的真实资产规格仍需补完 M2。
+
+**注意区分两个概念**：「覆盖所有资产类型」指任何 `AssetClass` 都能入索引并产出通用记录（由通用兜底提取器保证）；「每类资产都有同等深度的领域规格」依赖 M2，目前仍未实现。详见 §14。
 
 ## 4. TOON 为自定义方言
 
@@ -100,9 +103,28 @@ DuckDB FTS 不随 `INSERT` 自动更新。`ual-cli build` 每次灌库后调用 
 
 **当前缓解**：无 SDK 的离线/CI 场景本来就走 `ual-cli`（`build` / `lint-duplicates` / `verify-references` / `export-parquet`），不依赖 MCP；`ual_mcp/server.py --self-test` 也不导入 SDK，可在纯 DuckDB 环境验证 4 个工具的输出。
 
+## 14. 全类型覆盖的实际边界（2026-11-16）
+
+**类型无关性已成立**：`UALIndexBuilderCommandlet` 不按 `AssetClass` 过滤；`FUALExtractorRegistry` 内置 Priority 0 的 `FUniversalReflectionExtractor`，其 `CanExtract()` 恒为 `true`；`init.sql` 的 `asset_class` 是无枚举约束的 `VARCHAR`。因此新增任何 UObject 派生类（含插件自定义类型、新版引擎类型）都无需改代码即可入索引。
+
+本次补齐的三处实现：
+
+| 项 | 改动 | 验证状态 |
+| --- | --- | --- |
+| 扫描范围 | Commandlet 新增 `-Roots=/Game,/PluginA` 与 `-IncludePlugins`（自动纳入所有含内容插件的挂载根），按 `PackageName` 去重 | Python 侧无对应运行时；**C++ 未编译验证** |
+| taxonomy | 硬编码 10 族改为 `Server/ual_common/taxonomy.json`（24 族）单一事实源；Python `ual_common/taxonomy.py` 与生成头 `UALTaxonomyRules.h` 共用；未命中落 `Misc` | pytest 覆盖 27 种类型 + `Tools/gen_taxonomy.py --check` 漂移门禁 |
+| `logical_id` 碰撞 | `ual_common/db.py` 在冲突且 `asset_path` 不同时追加确定性 8 字符路径哈希 | pytest 覆盖重复灌库的幂等性 |
+
+**仍然存在的限制**：
+
+1. **默认扫描根仍是 `/Game`**。插件内容不会自动进入索引，必须显式传 `-Roots=...` 或 `-IncludePlugins`。当前 Ann 工程 `Content/` 下 13 个 `.uasset`、`Plugins/` 下 205 个，不显式配置就会漏掉约 94%。
+2. **零加载原则不变**：只读取 `FAssetData` 元数据与 Tag-Value，`UAL_ENABLE_CDO_REFLECTION` 默认关闭；覆盖的是元数据层，不含顶点、材质图、蓝图图表等资产内部结构。
+3. **C++ 改动未在 CI 编译**：`Ann` 的 `*.Target.cs` 仍引用 UE6 已移除的 `EngineIncludeOrderVersion.Unreal5_5`（见 §11），无法整体验证 `AnnEditor` target。生成头、扫描根与插件挂载 API 均按 UE6 源码树静态核对，但需本地 UE6 SDK 实机编译确认。
+4. **现有 `.ual/index.duckdb` 仍是 9 条种子数据／6 种类型**，不是真实工程索引；要得到全量结果需先用新参数重跑 Commandlet 并灌库。
+
 ## 边界之外：当前可用且已验证的部分
 
-以下能力在 **2026-11-15** 已通过 `pytest`（10 项）、`ual_mcp --self-test`、`ual-cli self-test` 端到端验证：
+以下能力在 **2026-11-16** 已通过 `pytest`（44 项，含 `test_type_coverage.py` 的 27 类分类与灌库回归）、`ual_cli self-test` 端到端验证：
 
 - DuckDB DDL 幂等执行、9 条资产 / 5 条边灌库、FTS 重建与 BM25 召回；
 - 硬约束过滤（`duration` / `forward_cm` / `dominant_limb` / `domain_scope`）；

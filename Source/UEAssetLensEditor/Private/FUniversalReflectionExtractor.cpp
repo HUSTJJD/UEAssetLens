@@ -1,4 +1,5 @@
 #include "FUniversalReflectionExtractor.h"
+#include "UALTaxonomyRules.h"
 
 #include "UALTypes.h"
 #include "UALFingerprint.h"
@@ -143,54 +144,37 @@ void FUniversalReflectionExtractor::TokenizeName(const FString& InName, TArray<F
 
 void FUniversalReflectionExtractor::BuildTaxonomy(const FString& AssetClass, TArray<FString>& OutTaxonomy)
 {
+	// 规则表由 Tools/gen_taxonomy.py 从 Server/ual_common/taxonomy.json 生成，
+	// 与 Python 侧共用同一份数据；新增 UE 资产类型族只需改 JSON 后重新生成。
+	// 大小写敏感匹配，保证 C++ 与 Python 的分类结果完全一致。
+	using namespace UALTaxonomyRules;
+
 	OutTaxonomy.Reset();
-	OutTaxonomy.Add(TEXT("Asset"));
+	OutTaxonomy.Add(GRoot);
 
-	FString Family;
-	if (AssetClass.Contains(TEXT("Texture")))
+	const TCHAR* Family = GFallback;
+	for (int32 RuleIdx = 0; RuleIdx < GRuleCount; ++RuleIdx)
 	{
-		Family = TEXT("Texture");
-	}
-	else if (AssetClass.Contains(TEXT("Material")))
-	{
-		Family = TEXT("Material");
-	}
-	else if (AssetClass.Contains(TEXT("Anim")) || AssetClass.Contains(TEXT("BlendSpace")) ||
-			 AssetClass.Contains(TEXT("Montage")) || AssetClass.Contains(TEXT("Skeleton")))
-	{
-		Family = TEXT("Animation");
-	}
-	else if (AssetClass.Contains(TEXT("Mesh")))
-	{
-		Family = TEXT("Mesh");
-	}
-	else if (AssetClass.Contains(TEXT("Sound")) || AssetClass.Contains(TEXT("Audio")))
-	{
-		Family = TEXT("Audio");
-	}
-	else if (AssetClass.Contains(TEXT("Blueprint")))
-	{
-		Family = TEXT("Blueprint");
-	}
-	else if (AssetClass.Contains(TEXT("Widget")) || AssetClass.Contains(TEXT("UMG")))
-	{
-		Family = TEXT("UI");
-	}
-	else if (AssetClass.Contains(TEXT("Niagara")) || AssetClass.Contains(TEXT("Particle")))
-	{
-		Family = TEXT("VFX");
-	}
-	else if (AssetClass.Contains(TEXT("DataAsset")) || AssetClass.Contains(TEXT("DataTable")) ||
-			 AssetClass.Contains(TEXT("Curve")))
-	{
-		Family = TEXT("Data");
-	}
-	else
-	{
-		Family = TEXT("Misc");
+		const FFamilyRule& Rule = GRules[RuleIdx];
+		bool bMatched = false;
+		for (int32 PatternIdx = 0; PatternIdx < Rule.PatternCount; ++PatternIdx)
+		{
+			if (AssetClass.Contains(Rule.Patterns[PatternIdx], ESearchCase::CaseSensitive))
+			{
+				bMatched = true;
+				break;
+			}
+		}
+		if (bMatched)
+		{
+			Family = Rule.Name;
+			break;
+		}
 	}
 
-	OutTaxonomy.AddUnique(Family);
+	// 任何 UObject 派生类（含用户自定义类与新版引擎新增类型）都会得到三层 taxonomy；
+	// 未命中规则时归入 Fallback 族，不会被丢弃。
+	OutTaxonomy.AddUnique(FString(Family));
 	OutTaxonomy.AddUnique(AssetClass);
 }
 
@@ -207,7 +191,7 @@ FString FUniversalReflectionExtractor::ComputeContentHash(const FAssetData& Asse
 	for (const auto& Tag : AssetData.TagsAndValues)
 	{
 		const FString Key = Tag.Key.ToString();
-		Pairs.Add(Key + TEXT("=") + Tag.Value);
+		Pairs.Add(Key + TEXT("=") + Tag.Value.AsString());
 	}
 	Pairs.Sort(); // 字典序，消除遍历顺序差异
 
@@ -312,7 +296,7 @@ void FUniversalReflectionExtractor::FillFromTags(const FAssetData& AssetData, FU
 	for (const auto& Tag : AssetData.TagsAndValues)
 	{
 		const FString Key = Tag.Key.ToString();
-		const FString Raw = Tag.Value;
+		const FString Raw = Tag.Value.AsString();
 		if (Key.IsEmpty() || Raw.IsEmpty())
 		{
 			continue;
@@ -359,9 +343,11 @@ bool FUniversalReflectionExtractor::Extract(const FAssetData& AssetData, FUALAss
 	// 仅用 FAssetData 元数据，不触发任何资源加载。
 	const FString AssetPath  = AssetData.PackageName.ToString();
 	const FString AssetName  = AssetData.AssetName.ToString();
-	FString AssetClass       = AssetData.AssetClass.ToString();
+	const FString AssetClassPath = AssetData.AssetClassPath.ToString();
+	FString AssetClass           = AssetClassPath;
 
 	// UE5.1+ 的 FTopLevelAssetPath::ToString() 形如 "/Script/Engine.StaticMesh"，取末段得到干净类名。
+	// 完整 class path 同时写入 tokens，避免不同模块下的同名 UClass 归一后无法区分。
 	int32 DotIdx = INDEX_NONE;
 	if (AssetClass.FindLastChar(TEXT('.'), DotIdx))
 	{
@@ -380,6 +366,7 @@ bool FUniversalReflectionExtractor::Extract(const FAssetData& AssetData, FUALAss
 	BuildTaxonomy(AssetClass, OutRecord.Taxonomy);
 	TokenizeName(BaseName, OutRecord.Tokens);
 	OutRecord.Tokens.AddUnique(AssetClass.ToLower());
+	OutRecord.Tokens.AddUnique(AssetClassPath.ToLower());
 
 	OutRecord.ContentHash    = ComputeContentHash(AssetData);
 	OutRecord.FingerprintVec = ComputeNameFingerprint(AssetPath, AssetName, AssetClass);

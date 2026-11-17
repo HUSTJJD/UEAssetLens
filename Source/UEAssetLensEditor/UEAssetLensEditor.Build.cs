@@ -21,7 +21,8 @@ public class UEAssetLensEditor : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
-			"UnrealEd"       // UCommandlet 所在的编辑器命令环境
+			"UnrealEd",      // UCommandlet 所在的编辑器命令环境
+			"Projects"       // IPluginManager::Get()（扫描插件挂载根）
 		});
 	}
 }

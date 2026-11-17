@@ -5,12 +5,15 @@ Field names are the contract in Server/schema/PROTOCOL.md.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 import duckdb
+
+from .taxonomy import build_taxonomy
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = Path(__file__).resolve().parents[1] / "schema"
@@ -158,6 +161,28 @@ def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
     return records
 
 
+def _disambiguate_logical_id(
+    con: duckdb.DuckDBPyConnection, asset_path: str, logical_id: str
+) -> str:
+    """Keep a deterministic, display-friendly logical_id without violating UNIQUE.
+
+    The UE sink builds ``<AssetClass>:<AssetName>`` from FAssetData alone, so two
+    assets in different folders -- or two UClasses with the same short name in
+    different modules -- can collide. Rather than reject the second asset (which
+    would silently drop whole asset types), append a stable 8-char path hash.
+    Repeated ingests of the same asset always produce the same suffix.
+    """
+    if not logical_id:
+        return logical_id
+    row = con.execute(
+        "SELECT asset_path FROM assets WHERE logical_id = ?", [logical_id]
+    ).fetchone()
+    if row is None or row[0] == asset_path:
+        return logical_id
+    suffix = hashlib.sha1(asset_path.encode("utf-8")).hexdigest()[:8]
+    return f"{logical_id}:{suffix}"
+
+
 def ingest_records(
     con: duckdb.DuckDBPyConnection,
     records: Iterable[dict[str, Any]],
@@ -179,6 +204,16 @@ def ingest_records(
         rec = normalize_record(raw)
         if not rec["asset_path"]:
             continue
+        # Any UObject asset class must land with a usable three-level taxonomy,
+        # even when an upstream sink omitted it. The rule table is shared with
+        # the C++ extractor (Server/ual_common/taxonomy.json).
+        if not rec["taxonomy"] and rec["asset_class"]:
+            rec["taxonomy"] = build_taxonomy(rec["asset_class"])
+        # logical_id is UNIQUE in init.sql; de-duplicate deterministically so a
+        # name/class collision cannot abort the whole ingest.
+        rec["logical_id"] = _disambiguate_logical_id(
+            con, rec["asset_path"], rec["logical_id"]
+        )
         # DuckDB binds Python lists natively to VARCHAR[] / FLOAT[N]; do NOT
         # json.dumps() them, CAST(? AS ...) handles the conversion.
         params = [rec[c] for c in ASSET_COLUMNS]

@@ -8,8 +8,10 @@
 // UUALIndexBuilderCommandlet：无头全量 / 增量索引构建器。
 //
 //   -run=UALIndexBuilder [-Project=<dir>] [-Out=<name>] [-Incremental]
+//                        [-Roots=/Game,/PluginA] [-IncludePlugins]
 //
-// 流程：确保 AssetRegistry 就绪 → GetAssetsByPath("/Game", true) 遍历 →
+// 流程：确保 AssetRegistry 就绪 → 按扫描根遍历（默认 /Game；-Roots 可显式指定，
+//       -IncludePlugins 追加所有含内容插件的挂载根，按 PackageName 去重）→
 //       FUALExtractorRegistry::ExtractRecord 产出记录 → IUALIndexSink 写出 →
 //       输出统计日志。-Incremental 用 content_hash 比对已有清单跳过未变更资产。
 //
@@ -28,9 +30,9 @@ public:
 	//~ End UCommandlet interface
 
 private:
-	/** 解析 -Project= / -Out= / -Incremental 参数。 */
+	/** 解析 -Project= / -Out= / -Incremental / -Roots= / -IncludePlugins 参数。 */
 	void ParseParams(const FString& Params, FString& OutProject, FString& OutOutput,
-		bool& bOutIncremental) const;
+		bool& bOutIncremental, TArray<FString>& OutRoots, bool& bOutIncludePlugins) const;
 
 	/** 读取 .ual/staging 下已有 JSONL，建立 asset_path -> content_hash 映射（增量用）。 */
 	TMap<FString, FString> LoadExistingHashes(const FString& StagingDir) const;

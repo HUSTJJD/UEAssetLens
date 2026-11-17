@@ -9,11 +9,23 @@
 | 部件 | 触发方式 | 职责 |
 | --- | --- | --- |
 | `FAssetRegistry` 监听 | 编辑器运行期新增 / 删除 / 更新 | 维护增量变更集合，不负责重活提取 |
-| `UUALIndexBuilderCommandlet` | `-run=UALIndexBuilder`，无头命令行 | 遍历 `GetAssetsByPath("/Game")`，调用提取器，产出 JSONL |
-| `FUALExtractorRegistry` | 按 `AssetClass` 分派 | 优先级 100 的领域提取器优先，优先级 0 的通用兜底保底 |
-| `FUniversalReflectionExtractor` | 任意未知类型 | 只读 `FAssetData.TagsAndValues`，剥离 `SM_/AM_/T_/MI_/BP_/WBP_` 前缀做分词，生成 `logical_id`、`taxonomy`、`tokens`、`content_hash` 与 16 维指纹 |
+| `UUALIndexBuilderCommandlet` | `-run=UALIndexBuilder`，无头命令行 | 按 `-Roots=` / `-IncludePlugins` 收集挂载根，逐个 `GetAssetsByPath(..., recursive)` 并按 `PackageName` 去重，调用提取器，产出 JSONL |
+| `FUALExtractorRegistry` | 按 `AssetClass` 分派 | 优先级 100 的领域提取器优先，优先级 0 的通用兜底保底（不设类型白名单） |
+| `FUniversalReflectionExtractor` | 任意 `AssetClass`，含未知类型 | 只读 `FAssetData.TagsAndValues`，剥离 `SM_/AM_/T_/MI_/BP_/WBP_` 前缀做分词，生成 `logical_id`、`taxonomy`、`tokens`、`content_hash` 与 16 维指纹；taxonomy 由共享规则表生成 |
 
 写入通过 `IUALIndexSink` 抽象。本仓库提供可无第三方库编译的 `UALJsonlIndexSink`（写 `.ual/staging/*.jsonl`）；生产环境的 DuckDB C API Appender 实现需随 ThirdParty 提供，尚未附带。Python 侧 `ual-cli build --from-jsonl` 负责灌库。
+
+### 1.1 为什么能覆盖所有资产类型
+
+覆盖能力由三点共同保证，任何一层出现白名单都会破坏它：
+
+1. **扫描层不挑类型**：只对挂载根做路径过滤，不传 `ARFilter` 的 class 条件。`-Roots=` 可显式列出根；`-IncludePlugins` 追加所有含内容插件的挂载根（默认仍为 `/Game`，需显式开启才能纳入插件资产）。
+2. **提取层兜底**：`FUALExtractorRegistry::FallbackExtractor` 是 `FUniversalReflectionExtractor`，`CanExtract()` 恒返回 `true`。领域提取器（Priority 100）只是增强，不是准入门槛。
+3. **存储层不设枚举**：`assets.asset_class` 是 `VARCHAR`，`taxonomy` 是 `VARCHAR[]`；`ual_common/db.py` 在记录缺 taxonomy 时按规则补全，并在 `logical_id` 与已有记录冲突时追加确定性路径哈希，避免 `UNIQUE` 约束把新类型资产挡在门外。
+
+`taxonomy` 的唯一事实源是 `Server/ual_common/taxonomy.json`：`ual_common/taxonomy.py` 直接读取它，`Tools/gen_taxonomy.py` 把它渲染成 `Source/UEAssetLensEditor/Public/UALTaxonomyRules.h`。两侧均为大小写敏感的有序子串匹配，未命中规则落入 `Misc` 族，但**仍然入索引**。新增 UE 资产类型族只需改 JSON 并重跑生成器，`--check` 负责阻止生成物漂移。
+
+边界：这只覆盖元数据层。领域深度字段（顶点直方图、材质参数聚类等）仍由 M2 负责，见 `known-limitations.md` §3 / §14。
 
 ## 2. 存储层：DuckDB
 
@@ -26,7 +38,7 @@ UE 侧 `UALJsonlIndexSink` 不直接写 DuckDB，而是输出 `.ual/staging/<nam
 | 键 | 类型 | 说明 |
 | --- | --- | --- |
 | `asset_path` | string | 主键，资产唯一 ID |
-| `logical_id` | string | `AssetClass:Name` |
+| `logical_id` | string | `AssetClass:Name`；同名同类跨目录碰撞时由灌库侧追加确定性 `:8位路径哈希` |
 | `asset_class` / `parent_class` | string | UClass 与父类 |
 | `taxonomy` | string[] | 分类路径数组 |
 | `tokens` | string | 空格连接的 VARCHAR（FTS 输入），见下方澄清 |

@@ -66,11 +66,16 @@ python Server/ual_mcp/engine_bridge.py --self-test
 
 PowerShell 一键测试：`pwsh Tools/run_tests.ps1`；自动配置 Claude Code / Cursor：`pwsh Tools/setup_mcp.ps1 -DryRun`。
 
-UE 侧无头扫描：
+UE 侧无头扫描（默认只扫 `/Game`，加 `-IncludePlugins` 才会把插件内容纳入索引）：
 
 ```bash
-UnrealEditor-Cmd.exe Ann.uproject -run=UALIndexBuilder -Project=Ann -Out=.ual/staging -Incremental -unattended -nosplash
+UnrealEditor-Cmd.exe Ann.uproject -run=UALIndexBuilder -Project=Ann -Out=.ual/staging -Incremental -IncludePlugins -unattended -nosplash
+
+# 或显式指定挂载根（逗号分隔）
+UnrealEditor-Cmd.exe Ann.uproject -run=UALIndexBuilder -Roots=/Game,/UEAbilityKit,/UnLuaNova -unattended -nosplash
 ```
+
+> 类型覆盖说明：扫描与提取不设 `AssetClass` 白名单，任何 UObject 派生类都会由通用兜底提取器入索引；`taxonomy` 规则集中在 `Server/ual_common/taxonomy.json`，改后需运行 `python Tools/gen_taxonomy.py`。领域深度字段仍受 M2 进度约束，见 `docs/known-limitations.md` §3 / §14。
 
 ## MCP 工具
 
@@ -126,6 +131,7 @@ IndexPath=D:/learning/AnnBuildTools/Ann/.ual/index.duckdb
 | 里程碑 | 状态 | 内容 |
 |---|---|---|
 | M1 存储底座与通用提取器 | **已实现** | DuckDB DDL（实测 DuckDB 2.0.0）、UE 插件三模块骨架、16 维指纹数学、`IAssetExtractor`、`FUniversalReflectionExtractor`、AssetRegistry 增量监听、无头 Commandlet、JSONL 落盘 |
+| M1+ 全类型索引覆盖 | **部分（待 UE 编译）** | 多挂载根扫描（`-Roots=` / `-IncludePlugins`）、taxonomy 单一事实源（24 族）、`logical_id` 碰撞消歧；Python 侧 44 项 pytest 通过，C++ 侧需本地 UE6 SDK 编译验证 |
 | M2 四大核心提取器 | **部分** | 指纹算法与 YAML 生成器已就绪；StaticMesh / AnimMontage / Material / Blueprint 的 UE 领域反射代码尚未全量落地 |
 | M3 图谱与 MCP Server | **已实现** | 4 个工具、TOON/YAML 唯一序列化实现、`asset_edges` 共现查询；基于官方 MCP SDK 2.x（`MCPServer`），无手写协议降级 |
 | M4 CI 门禁 CLI | **已实现** | 4 个命令 + `self-test` + pytest 端到端测试；UE 侧端到端联调待本地 UE SDK |

@@ -29,6 +29,12 @@
 
 ## 3. 编码约定
 
+### 跨语言
+
+- `taxonomy` 规则唯一事实源是 `Server/ual_common/taxonomy.json`：Python 侧 `ual_common/taxonomy.py` 直接读取，C++ 侧读 `Tools/gen_taxonomy.py` 生成的 `UALTaxonomyRules.h`。**禁止在任一侧另写一套类名 → 族名映射**；改 JSON 后必须重跑生成器，`--check` 会阻止生成物漂移。
+- 索引不设 `AssetClass` 白名单：扫描、提取、灌库三层都不得按类型过滤或拒收。新资产类型应能被通用兜底提取器产出记录；命令行默认只扫 `/Game`，需要插件内容时显式传 `-Roots=` 或 `-IncludePlugins`。
+- `logical_id` 在库内有 UNIQUE 约束；同名同类跨目录冲突由 `ual_common/db.py` 追加确定性路径哈希，禁止改成随机 ID 或直接丢弃记录。
+
 ### C++（UE5）
 
 - UE 命名法：`F` 结构、`U` 对象、`I` 接口、`E` 枚举；头文件 `#pragma once`。
@@ -49,6 +55,7 @@
 ```bash
 python -m pytest Server/tests -q
 python Server/ual_cli/ual_cli.py self-test
+python Tools/gen_taxonomy.py --check   # taxonomy 规则表无漂移
 python Tools/gen_docs.py            # 同步生成参考页
 python Tools/gen_docs.py --check    # 漂移门禁
 python -m mkdocs build --strict --site-dir _site
