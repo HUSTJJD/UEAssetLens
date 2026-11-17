@@ -34,3 +34,7 @@ site/
 # OS
 Thumbs.db
 .DS_Store
+
+# Plugin release archives (Tools/package_plugin.py)
+dist/
+*.zip.sha256

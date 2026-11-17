@@ -38,5 +38,9 @@
 			"Enabled": true,
 			"Optional": true
 		}
-	]
+	],
+	"SupportedTargetPlatforms": ["Win64", "Mac", "Linux", "Android", "IOS"],
+	"DocsURL": "https://hustjjd.github.io/UEAssetLens/",
+	"SupportURL": "https://github.com/HUSTJJD/UEAssetLens/issues",
+	"CreatedByURL": "https://github.com/HUSTJJD/UEAssetLens"
 }

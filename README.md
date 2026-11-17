@@ -173,3 +173,29 @@ pwsh -File Tools/run_tests.ps1                # 一键：生成 + 严格构建 +
 ## 许可
 
 见仓库根 LICENSE（如未附带，沿用宿主工程 `Ann` 的许可约定）。
+
+## 作为独立插件安装 / 发布
+
+仓库根目录本身就是插件根（`UEAssetLens.uplugin` 在此），可直接复制，也可用发布包：
+
+```bash
+# 产出 dist/UEAssetLens-<VersionName>-src.zip 及 .sha256
+python Tools/package_plugin.py
+python Tools/package_plugin.py --verify-only dist/UEAssetLens-2.0.0-src.zip
+
+# 安装：把 zip 内 UEAssetLens/ 解压到目标工程的 Plugins/UEAssetLens/
+```
+
+`Config/FilterPlugin.ini` 为 UAT `BuildPlugin` 声明额外随包文件。打包脚本只产出**源码包**：
+不含 `EngineVersion` 锁定、不含 `Binaries/` / `Intermediate/`，因此可放进任意兼容引擎版本的工程重新编译。
+Python 服务端依赖见 `requirements.txt`，引擎侧仅需 `AssetRegistry`；`ModelContextProtocol` 为可选依赖。
+
+**引擎兼容矩阵**
+
+| 引擎 | 状态 |
+|---|---|
+| UE 6.0（源码构建，宿主 Ann 工程） | 已编译验证（`AnnEditor Win64 Development`） |
+| UE 5.8 | 未在当前环境验证；源码包可直接编译尝试 |
+
+推送 `v*` tag 会触发 `.github/workflows/release.yml`，自动构建并上传 zip 与 SHA256 到 GitHub Release。
+也可在 Actions 里手动 `workflow_dispatch` 触发。
