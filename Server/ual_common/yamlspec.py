@@ -6,7 +6,7 @@ Git diffs clean. No timestamps, no absolute local paths, no random IDs.
 """
 from __future__ import annotations
 
-import json
+import yaml
 from typing import Any
 
 HEADER = "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)"
@@ -31,22 +31,23 @@ def _fmt(value: Any) -> str:
 def _seq(values: Any) -> str:
     if isinstance(values, str):
         try:
-            values = json.loads(values)
-        except (ValueError, TypeError):
+            values = yaml.safe_load(values)
+        except (ValueError, TypeError, yaml.YAMLError):
             return "[]"
     if not isinstance(values, (list, tuple)):
         return "[]"
     return "[" + ", ".join(_fmt(v) for v in values) + "]"
 
 
-def _maybe_json(raw: Any, default: Any) -> Any:
+def _maybe_yaml(raw: Any, default: Any) -> Any:
+    """MAP(VARCHAR,VARCHAR) values carry YAML text fragments; parse them back."""
     if raw is None or raw == "":
         return default
     if not isinstance(raw, str):
         return raw
     try:
-        return json.loads(raw)
-    except (ValueError, TypeError):
+        return yaml.safe_load(raw)
+    except (ValueError, TypeError, yaml.YAMLError):
         return default
 
 
@@ -55,9 +56,9 @@ def build_yaml(record: dict[str, Any], referencers: list[str] | None = None) -> 
     spec = record.get("domain_spec") or {}
     iface = record.get("interface_spec") or {}
     referencers = referencers or []
-    phases = _maybe_json(spec.get("phases"), {}) or {}
-    notifies = _maybe_json(spec.get("notifies"), []) or []
-    kin = _maybe_json(spec.get("kinematics"), {}) or {}
+    phases = _maybe_yaml(spec.get("phases"), {}) or {}
+    notifies = _maybe_yaml(spec.get("notifies"), []) or []
+    kin = _maybe_yaml(spec.get("kinematics"), {}) or {}
 
     out = [HEADER, "", "identity:"]
     out.append(f"  logical_id: {record.get('logical_id', '')}")
@@ -76,7 +77,7 @@ def build_yaml(record: dict[str, Any], referencers: list[str] | None = None) -> 
     duration = _num(record.get("duration"))
     out.append("domain_spec:")
     out.append(f"  duration: {_fmt(duration)} # unit: seconds")
-    delta = _maybe_json(spec.get("root_motion_delta"), [0.0, 0.0, 0.0])
+    delta = _maybe_yaml(spec.get("root_motion_delta"), [0.0, 0.0, 0.0])
     out.append("  kinematics:")
     out.append(
         f"    root_motion_delta: {_seq(delta)} # deterministic root displacement (cm)"

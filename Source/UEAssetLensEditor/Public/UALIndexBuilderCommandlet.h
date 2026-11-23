@@ -34,6 +34,6 @@ private:
 	void ParseParams(const FString& Params, FString& OutProject, FString& OutOutput,
 		bool& bOutIncremental, TArray<FString>& OutRoots, bool& bOutIncludePlugins) const;
 
-	/** 读取 .ual/staging 下已有 JSONL，建立 asset_path -> content_hash 映射（增量用）。 */
+	/** 读取 .ual/staging 下已有 YAML 文档流，建立 asset_path -> content_hash 映射（增量用）。 */
 	TMap<FString, FString> LoadExistingHashes(const FString& StagingDir) const;
 };

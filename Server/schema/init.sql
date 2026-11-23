@@ -6,7 +6,7 @@
 --   list_cosine_similarity(fp::FLOAT[], target::FLOAT[])).
 --
 -- NOTE ON FTS: DuckDB's FTS index is a snapshot. It is NOT maintained on INSERT.
--- After any bulk ingest (ual-cli build / JSONL import) you MUST rebuild it:
+-- After any bulk ingest (ual-cli build / YAML import) you MUST rebuild it:
 --   PRAGMA drop_fts_index('assets');
 --   PRAGMA create_fts_index('assets', 'asset_path', 'tokens', 'logical_id');
 -- See rebuild_fts.sql.
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS assets (
     fingerprint_vec   FLOAT[16],
 
     -- Full structured payload. Values are serialized strings by convention:
-    --   scalars -> plain text, vectors -> "[a,b,c]", lists -> JSON array string.
+    --   scalars -> plain text, vectors -> "[a,b,c]", lists/objects -> YAML text fragment.
     -- MAP(VARCHAR,VARCHAR) erases numeric types; readers must parse by key contract.
     interface_spec    MAP(VARCHAR, VARCHAR),
     domain_spec       MAP(VARCHAR, VARCHAR),

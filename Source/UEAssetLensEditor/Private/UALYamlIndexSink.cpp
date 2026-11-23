@@ -1,26 +1,25 @@
-#include "UALJsonlIndexSink.h"
+#include "UALYamlIndexSink.h"
 
 #include "UALTypes.h"
+#include "UEYaml.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
-#include "Serialization/JsonSerializer.h"
-#include "Serialization/JsonWriter.h"
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogUALJsonlSink, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogUALYamlSink, Log, All);
 
 namespace
 {
-	// 把非有限浮点转成 0，保证 JSONL 里绝不出现 NaN / Infinity。
+	// 把非有限浮点转成 0，保证 YAML 里绝不出现 NaN / Infinity。
 	static double SafeNumber(float V)
 	{
 		return (FMath::Abs(V) <= TNumericLimits<float>::Max()) ? (double)V : 0.0;
 	}
 }
 
-FUALJsonlIndexSink::FUALJsonlIndexSink(const FString& InName, const FString& InProjectDir)
+FUALYamlIndexSink::FUALYamlIndexSink(const FString& InName, const FString& InProjectDir)
 	: Name(InName)
 	, ProjectDir(InProjectDir)
 {
@@ -30,9 +29,9 @@ FUALJsonlIndexSink::FUALJsonlIndexSink(const FString& InName, const FString& InP
 	}
 }
 
-FUALJsonlIndexSink::~FUALJsonlIndexSink() = default;
+FUALYamlIndexSink::~FUALYamlIndexSink() = default;
 
-bool FUALJsonlIndexSink::Begin()
+bool FUALYamlIndexSink::Begin()
 {
 	Records.Reset();
 	Edges.Reset();
@@ -49,14 +48,14 @@ bool FUALJsonlIndexSink::Begin()
 	{
 		SafeName = TEXT("index");
 	}
-	OutputPath = FPaths::Combine(Dir, SafeName + TEXT(".jsonl"));
+	OutputPath = FPaths::Combine(Dir, SafeName + TEXT(".yaml"));
 
 	bBegun = true;
-	UE_LOG(LogUALJsonlSink, Log, TEXT("Begin JSONL sink -> %s"), *OutputPath);
+	UE_LOG(LogUALYamlSink, Log, TEXT("Begin YAML sink -> %s"), *OutputPath);
 	return true;
 }
 
-void FUALJsonlIndexSink::AppendRecord(const FUALAssetRecord& Record)
+void FUALYamlIndexSink::AppendRecord(const FUALAssetRecord& Record)
 {
 	if (!bBegun)
 	{
@@ -65,7 +64,7 @@ void FUALJsonlIndexSink::AppendRecord(const FUALAssetRecord& Record)
 	Records.Add(Record);
 }
 
-void FUALJsonlIndexSink::AppendEdge(const FUALEdgeRecord& Edge)
+void FUALYamlIndexSink::AppendEdge(const FUALEdgeRecord& Edge)
 {
 	if (!bBegun)
 	{
@@ -74,9 +73,10 @@ void FUALJsonlIndexSink::AppendEdge(const FUALEdgeRecord& Edge)
 	Edges.Add(Edge);
 }
 
-FString FUALJsonlIndexSink::BuildRecordJson(const FUALAssetRecord& Record,
+FString FUALYamlIndexSink::BuildRecordYaml(const FUALAssetRecord& Record,
 	const TArray<const FUALEdgeRecord*>& RowEdges) const
 {
+	// FJsonObject 仍是内存 DOM；UEYaml::EmitDocument 负责 YAML 文本落盘。
 	TSharedRef<FJsonObject> Obj = MakeShared<FJsonObject>();
 
 	Obj->SetStringField(TEXT("asset_path"), Record.AssetPath);
@@ -93,7 +93,7 @@ FString FUALJsonlIndexSink::BuildRecordJson(const FUALAssetRecord& Record,
 	Obj->SetArrayField(TEXT("taxonomy"), TaxArr);
 
 	// tokens: canonical VARCHAR text for the DuckDB FTS index. The C++ record
-	// stores terms as an array; join them here so the JSONL contract matches
+	// stores terms as an array; join them here so the YAML contract matches
 	// Server/ual_common/db.py (which also tolerates the legacy array form).
 	Obj->SetStringField(TEXT("tokens"), FString::Join(Record.Tokens, TEXT(" ")));
 
@@ -121,7 +121,7 @@ FString FUALJsonlIndexSink::BuildRecordJson(const FUALAssetRecord& Record,
 	}
 	Obj->SetArrayField(TEXT("fingerprint_vec"), Fp);
 
-	// interface_spec / domain_spec：字符串 -> 字符串对象
+	// interface_spec / domain_spec：字符串 -> 字符串对象（MAP(VARCHAR,VARCHAR)）。
 	TSharedPtr<FJsonObject> Iface = MakeShared<FJsonObject>();
 	for (const TPair<FString, FString>& P : Record.InterfaceSpec)
 	{
@@ -154,13 +154,11 @@ FString FUALJsonlIndexSink::BuildRecordJson(const FUALAssetRecord& Record,
 	}
 	Obj->SetArrayField(TEXT("edges"), EdgeArr);
 
-	FString Output;
-	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Output);
-	FJsonSerializer::Serialize(Obj, Writer);
-	return Output;
+	// 自写缩进 emitter：所有字符串显式双引号，避免中文/冒号/引号/换行破坏语义。
+	return UEYaml::EmitDocument(Obj);
 }
 
-bool FUALJsonlIndexSink::Commit()
+bool FUALYamlIndexSink::Commit()
 {
 	if (!bBegun)
 	{
@@ -182,33 +180,33 @@ bool FUALJsonlIndexSink::Commit()
 	}
 
 	static const TArray<const FUALEdgeRecord*> EmptyEdges;
-	FString FileContent;
-	int32 Lines = 0;
+	TArray<FString> Docs;
 	for (const FUALAssetRecord& R : Records)
 	{
 		const TArray<const FUALEdgeRecord*>* Found = EdgesBySource.Find(R.AssetPath);
 		const TArray<const FUALEdgeRecord*>& RowEdges = Found ? *Found : EmptyEdges;
-		FileContent += BuildRecordJson(R, RowEdges);
-		FileContent += TEXT("\n");
-		++Lines;
+		Docs.Add(BuildRecordYaml(R, RowEdges));
 	}
 
 	for (const TPair<FString, TArray<const FUALEdgeRecord*>>& Pair : EdgesBySource)
 	{
 		if (!RecordPaths.Contains(Pair.Key))
 		{
-			UE_LOG(LogUALJsonlSink, Verbose,
+			UE_LOG(LogUALYamlSink, Verbose,
 				TEXT("%d edge(s) for un-indexed source %s were skipped"),
 				Pair.Value.Num(), *Pair.Key);
 		}
 	}
 
+	// 多文档流：每个文档由 "---" 起始，替代旧的一行一个对象的交换格式。
+	const FString FileContent = UEYaml::EmitStream(Docs);
+
 	const bool bOk = FFileHelper::SaveStringToFile(FileContent, *OutputPath,
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 
-	UE_LOG(LogUALJsonlSink, Log,
-		TEXT("Commit JSONL sink: %d records / %d edges / %d lines -> %s (ok=%d)"),
-		Records.Num(), Edges.Num(), Lines, *OutputPath, bOk ? 1 : 0);
+	UE_LOG(LogUALYamlSink, Log,
+		TEXT("Commit YAML sink: %d records / %d edges / %d docs -> %s (ok=%d)"),
+		Records.Num(), Edges.Num(), Docs.Num(), *OutputPath, bOk ? 1 : 0);
 
 	Records.Reset();
 	Edges.Reset();

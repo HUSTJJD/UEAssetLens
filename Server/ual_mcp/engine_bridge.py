@@ -6,19 +6,19 @@ FPlatformProcess::ExecProcess. Arguments and results travel through UTF-8 files
 rather than stdout so that Chinese annotations in TOON/YAML survive intact on
 Windows (ExecProcess returns stdout as an ANSI-ish FString).
 
-Request JSON : {"tool": "ual_search_assets", "arguments": {...}}
+Request YAML : tool / arguments mapping (UTF-8 file, no BOM)
 Response     : raw TOON or YAML text (UTF-8, no BOM)
 
 Usage:
-  python engine_bridge.py --request req.json --response resp.txt [--index .ual/index.duckdb]
+  python engine_bridge.py --request req.yaml --response resp.txt [--index .ual/index.duckdb]
   python engine_bridge.py --self-test
 """
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import tempfile
+import yaml
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +57,7 @@ def dispatch(con: Any, name: str, arguments: dict[str, Any]) -> str:
 
 def handle(request_path: Path, response_path: Path, index: str | None) -> int:
     try:
-        request = json.loads(request_path.read_text(encoding="utf-8"))
+        request = yaml.safe_load(request_path.read_text(encoding="utf-8"))
         name = request["tool"]
         arguments = request.get("arguments") or {}
         con = db.open_readonly(index)
@@ -81,7 +81,7 @@ def self_test() -> int:
     index = Path(tempfile.gettempdir()) / "ual_bridge_self_test.duckdb"
     index.unlink(missing_ok=True)
     con = db.open_write(index)
-    db.ingest_records(con, db.load_jsonl(SERVER_ROOT / "tests" / "seed.jsonl"))
+    db.ingest_records(con, db.load_yaml_docs(SERVER_ROOT / "tests" / "seed.yaml"))
     con.close()
 
     hero = "/Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02"
@@ -117,7 +117,7 @@ def self_test() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="UAL in-editor MCP bridge")
-    parser.add_argument("--request", help="Path to the request JSON file")
+    parser.add_argument("--request", help="Path to the request YAML file")
     parser.add_argument("--response", help="Path to write the TOON/YAML response")
     parser.add_argument("--index", default=None, help="Path to .ual/index.duckdb")
     parser.add_argument("--self-test", action="store_true")

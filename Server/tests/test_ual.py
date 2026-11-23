@@ -1,4 +1,4 @@
-"""End-to-end contract tests: DDL -> JSONL ingest -> MCP tools -> CI gates."""
+"""End-to-end contract tests: DDL -> YAML ingest -> MCP tools -> CI gates."""
 from __future__ import annotations
 
 import argparse
@@ -17,7 +17,7 @@ from ual_common.yamlspec import build_yaml
 from ual_mcp import tools
 from ual_cli import ual_cli
 
-SEED = Path(__file__).parent / "seed.jsonl"
+SEED = Path(__file__).parent / "seed.yaml"
 HERO = "/Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02"
 
 
@@ -25,7 +25,7 @@ HERO = "/Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02"
 def index(tmp_path_factory) -> Path:
     path = tmp_path_factory.mktemp("ual") / "index.duckdb"
     con = db.open_write(path)
-    stats = db.ingest_records(con, db.load_jsonl(SEED))
+    stats = db.ingest_records(con, db.load_yaml_docs(SEED))
     assert stats == {"assets": 9, "edges": 5}
     con.close()
     return path
@@ -113,7 +113,7 @@ def test_toon_roundtrip_with_escaping():
 
 def test_yaml_has_no_timestamps_or_local_paths(tmp_path):
     con = db.open_write(tmp_path / "y.duckdb")
-    db.ingest_records(con, db.load_jsonl(SEED))
+    db.ingest_records(con, db.load_yaml_docs(SEED))
     asset = db.get_asset(con, HERO)
     refs = db.referencer_paths(con, HERO)
     text = build_yaml(asset, refs)
@@ -177,12 +177,12 @@ def test_engine_bridge_dispatches_all_four_tools(ro):
 
 
 def test_tool_schemas_contract_matches_python_server():
-    import json
+    import yaml
 
     from ual_mcp import tools as mcp_tools
 
-    schema_path = Path(__file__).resolve().parents[1] / "ual_mcp" / "tool_schemas.json"
-    payload = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema_path = Path(__file__).resolve().parents[1] / "ual_mcp" / "tool_schemas.yaml"
+    payload = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "2.0"
     assert [t["name"] for t in payload["tools"]] == list(mcp_tools.TOOL_NAMES)
     for tool in payload["tools"]:

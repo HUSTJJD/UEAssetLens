@@ -40,8 +40,9 @@ jobs:
       - name: Install MkDocs toolchain
         run: pip install -r requirements-docs.txt
       - name: Verify generated reference is up to date
-        # The generator is stdlib-only; --check fails when a source-of-truth
-        # file changed but docs/reference/*.md was not regenerated.
+        # The generator uses stdlib + PyYAML (requirements-docs.txt); --check
+        # fails when a source-of-truth file changed but generated files were
+        # not regenerated (docs/reference/*.md, tool_schemas.yaml, ...).
         run: python Tools/gen_docs.py --check
       - name: Build docs
         # --strict turns warnings into a build failure, which is the only way a

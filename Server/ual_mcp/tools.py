@@ -17,8 +17,8 @@ BUNDLE_FIELDS = ["logical_id", "asset_class", "weight", "hint"]
 SIMILAR_FIELDS = ["logical_id", "asset_class", "similarity", "shared_class"]
 
 # The single source of truth for tool names, descriptions and input schemas.
-# Tools/gen_docs.py parses this literal (stdlib-only, no imports of this module)
-# to emit tool_schemas.json for the C++ in-editor MCP frontend and the generated
+# Tools/gen_docs.py parses this literal via AST (no import of this module) to
+# emit tool_schemas.yaml for the C++ in-editor MCP frontend and the generated
 # reference docs. Keep it in sync with the @sdk.tool() signatures in server.py.
 TOOL_DEFS: list[dict[str, Any]] = [
     {

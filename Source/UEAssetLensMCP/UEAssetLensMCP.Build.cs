@@ -10,6 +10,7 @@ public class UEAssetLensMCP : ModuleRules
 
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
+			"UEYaml",
 			"Core",
 			"CoreUObject",
 		});
@@ -17,7 +18,7 @@ public class UEAssetLensMCP : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"Engine",
-			"Json",
+			"Json",           // FJsonObject DOM + GetInputJsonSchema() (SDK contract)
 			"JsonUtilities",
 			"Projects",
 			// Epic's first-party in-editor MCP server (UE6 Experimental).

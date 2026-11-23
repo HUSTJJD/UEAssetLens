@@ -6,13 +6,12 @@
 #include "UALEngineMcpLog.h"
 #include "UALEngineMcpTool.h"
 
+#include "UEYaml.h"
 #include "Dom/JsonObject.h"
 #include "IModelContextProtocolModule.h"
 #include "IModelContextProtocolTool.h"
 #include "Misc/FileHelper.h"
 #include "Modules/ModuleManager.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
 
 DEFINE_LOG_CATEGORY(LogUALEngineMcp);
 
@@ -36,11 +35,13 @@ namespace
 			return false;
 		}
 
-		TSharedPtr<FJsonObject> Root;
-		const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Raw);
-		if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+		// tool_schemas.yaml 是磁盘格式；解析后仍构造 FJsonObject 喂给 Epic SDK：
+		// inputSchema 必须是 FJsonObject（GetInputJsonSchema 的强制签名），Json
+		// 模块依赖因此保留。UEYaml.h 用 ryml 完成 YAML -> FJsonObject。
+		TSharedPtr<FJsonObject> Root = UEYaml::ParseDocument(Raw);
+		if (!Root.IsValid())
 		{
-			UE_LOGF(LogUALEngineMcp, Error, "Invalid JSON in %ls", *SchemaPath);
+			UE_LOGF(LogUALEngineMcp, Error, "Invalid YAML in %ls", *SchemaPath);
 			return false;
 		}
 

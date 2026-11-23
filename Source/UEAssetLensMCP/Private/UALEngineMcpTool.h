@@ -8,10 +8,10 @@
 /**
  * One UAL tool exposed through Epic's in-editor MCP server.
  *
- * Name / description / inputSchema all come from Server/ual_mcp/tool_schemas.json,
+ * Name / description / inputSchema all come from Server/ual_mcp/tool_schemas.yaml,
  * which is generated from TOOL_DEFS - the same contract used by the Python
  * stdio server and the generated reference docs. This keeps all three frontends
- * from drifting apart.
+ * from drifting apart. The DOM stays FJsonObject (SDK-mandated signatures).
  */
 class FUALEngineMcpTool : public IModelContextProtocolTool
 {

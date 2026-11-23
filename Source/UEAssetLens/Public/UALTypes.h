@@ -17,7 +17,7 @@
 // 约定（务必遵守）：
 //   * BoundsSize     固定 3 个元素，顺序 [X, Y, Z]，缺省补 0。
 //   * FingerprintVec 固定 16 个 float，顺序由 FUALFingerprint 定义，缺省补 0。
-//     用 TArray<float> 而非 FVector 是为了让所有数组类字段在 JSONL / DuckDB
+//     用 TArray<float> 而非 FVector 是为了让所有数组类字段在 YAML / DuckDB
 //     之间拥有一致的序列化形态；长度约束由构造函数与写入端共同保证。
 //   * InterfaceSpec / DomainSpec 为字符串到字符串的映射（DuckDB MAP(VARCHAR,VARCHAR)）。
 //   * 所有时间戳以 ISO8601 字符串保存，避免时区 / 精度差异。
@@ -30,7 +30,7 @@ enum class EUALEdgeType : uint8
 	CO_OCCURS   UMETA(DisplayName = "CO_OCCURS")
 };
 
-// 边类型的字符串化辅助，供 JSONL / DuckDB 写入端使用，保证 'DEPENDS_ON'|'CO_OCCURS' 字面一致。
+// 边类型的字符串化辅助，供 YAML / DuckDB 写入端使用，保证 'DEPENDS_ON'|'CO_OCCURS' 字面一致。
 namespace UAL
 {
 	inline const TCHAR* EdgeTypeToString(EUALEdgeType Type)

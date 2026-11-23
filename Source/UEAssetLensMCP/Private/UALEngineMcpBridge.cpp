@@ -4,6 +4,11 @@
 
 #include "UALEngineMcpLog.h"
 
+#include "UEYaml.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
 #include "Interfaces/IPluginManager.h"
@@ -49,7 +54,7 @@ FUALEngineMcpBridge::FUALEngineMcpBridge()
 	Paths.BridgeScript = FPaths::ConvertRelativePathToFull(
 		FPaths::Combine(PluginDir, TEXT("Server"), TEXT("ual_mcp"), TEXT("engine_bridge.py")));
 	Paths.SchemaFile = FPaths::ConvertRelativePathToFull(
-		FPaths::Combine(PluginDir, TEXT("Server"), TEXT("ual_mcp"), TEXT("tool_schemas.json")));
+		FPaths::Combine(PluginDir, TEXT("Server"), TEXT("ual_mcp"), TEXT("tool_schemas.yaml")));
 	Paths.WorkingDirectory = FPaths::ConvertRelativePathToFull(
 		FPaths::Combine(PluginDir, TEXT("Server")));
 	Paths.TempDirectory = FPaths::ConvertRelativePathToFull(
@@ -70,7 +75,7 @@ bool FUALEngineMcpBridge::CallTool(const FString& ToolName, const FString& Param
 	const FString Stem = FGuid::NewGuid().ToString(EGuidFormats::Digits);
 	IFileManager::Get().MakeDirectory(*Paths.TempDirectory, true);
 
-	const FString RequestPath = FPaths::Combine(Paths.TempDirectory, Stem + TEXT("_request.json"));
+	const FString RequestPath = FPaths::Combine(Paths.TempDirectory, Stem + TEXT("_request.yaml"));
 	const FString ResponsePath = FPaths::Combine(Paths.TempDirectory, Stem + TEXT("_response.txt"));
 
 	auto Cleanup = [&RequestPath, &ResponsePath]()
@@ -79,10 +84,21 @@ bool FUALEngineMcpBridge::CallTool(const FString& ToolName, const FString& Param
 		IFileManager::Get().Delete(*ResponsePath, false, true);
 	};
 
-	const FString RequestJson = FString::Printf(
-		TEXT("{\"tool\":\"%s\",\"arguments\":%s}"), *ToolName, *ParamsJson);
+	// ParamsJson 是 SDK 把 FJsonObject 序列化后的内部边界值（不是磁盘格式）。
+	// 先反序列化回 FJsonObject DOM，再连同 tool 名组装成 wrapper，由共享
+	// emitter 输出 YAML —— 绝不用 FString::Printf 手工拼接请求：中文、冒号、
+	// 引号、换行都会破坏 YAML 缩进语义。
+	TSharedPtr<FJsonObject> ArgsObject;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
+	FJsonSerializer::Deserialize(Reader, ArgsObject);
 
-	if (!FFileHelper::SaveStringToFile(RequestJson, *RequestPath,
+	TSharedRef<FJsonObject> Wrapper = MakeShared<FJsonObject>();
+	Wrapper->SetStringField(TEXT("tool"), ToolName);
+	Wrapper->SetObjectField(TEXT("arguments"),
+		ArgsObject.IsValid() ? ArgsObject.ToSharedRef() : MakeShared<FJsonObject>());
+	const FString RequestYaml = UEYaml::EmitDocument(Wrapper);
+
+	if (!FFileHelper::SaveStringToFile(RequestYaml, *RequestPath,
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
 	{
 		OutError = FString::Printf(TEXT("Cannot write UAL MCP request file: %s"), *RequestPath);

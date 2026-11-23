@@ -8,4 +8,9 @@
 # Commit an exact pin only after verifying the documentation build locally:
 #   python Tools/gen_docs.py
 #   python -m mkdocs build --strict --site-dir _site
+#
+# Tools/gen_docs.py and Tools/gen_taxonomy.py read/write the plugin's YAML
+# data files, so PyYAML is required by the docs toolchain too (not just the
+# runtime requirements.txt).
+PyYAML>=6.0
 mkdocs-material>=9.5,<10

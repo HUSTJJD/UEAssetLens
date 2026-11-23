@@ -8,8 +8,8 @@
 //
 // 生产实现：DuckDB C API Appender（直接写 .ual/index.duckdb 的 assets /
 // asset_edges 两张表；需引入 duckdb.h，这里不直接依赖任何第三方头文件）。
-// 参考实现：FUALJsonlIndexSink（写 .ual/staging/<name>.jsonl，无需第三方库
-// 即可编译验证，由 Python 侧读取后灌入 DuckDB）。
+// 参考实现：FUALYamlIndexSink（写 .ual/staging/<name>.yaml 多文档流，仅依赖
+// 随仓 RapidYaml 单头文件 + UE Json 模块即可编译验证，由 Python 侧读取后灌入 DuckDB）。
 // ---------------------------------------------------------------------------
 class IUALIndexSink
 {

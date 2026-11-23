@@ -2,7 +2,7 @@
 """ual-cli — UEAssetLens headless CLI and CI gate.
 
 Commands:
-  build             Seed/update .ual/index.duckdb from UE Commandlet JSONL output.
+  build             Seed/update .ual/index.duckdb from UE Commandlet YAML doc-stream.
   lint-duplicates   Cosine self-join duplicate gate (non-zero exit blocks the commit).
   verify-references Validate asset paths / skeletons / material params in configs & scripts.
   export-parquet    COPY ... TO Parquet for cross-project catalog sharing.
@@ -11,7 +11,6 @@ Commands:
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import subprocess
 import sys
@@ -29,12 +28,12 @@ if str(SERVER_ROOT) not in sys.path:
 from ual_common import db  # noqa: E402
 from ual_common.toon import Table, render_toon  # noqa: E402
 
-SEED = SERVER_ROOT / "tests" / "seed.jsonl"
+SEED = SERVER_ROOT / "tests" / "seed.yaml"
 ASSET_PATH_RE = re.compile(r"/Game/[A-Za-z0-9_/\-.]+")
 USER_PARAM_RE = re.compile(r"User\.([A-Za-z_]\w*)")
 SETSCALAR_RE = re.compile(r"(?:SetScalar|SetVector)ParameterValue\(\s*['\"]([A-Za-z_]\w*)['\"]")
 SKELETON_RE = re.compile(r"(?im)^\s*skeleton\s*:\s*(/Game/[A-Za-z0-9_/\-.]+)\s*$")
-SCAN_SUFFIXES = (".yaml", ".yml", ".json", ".luau", ".lua")
+SCAN_SUFFIXES = (".yaml", ".yml", ".luau", ".lua")
 
 
 def _open(index: str | None) -> duckdb.DuckDBPyConnection:
@@ -52,7 +51,7 @@ def _run_ue_commandlet(args: argparse.Namespace) -> list[Path]:
     if not engine:
         raise SystemExit(
             "ual-cli: no --engine-cmd given and UE_EDITOR_CMD is unset.\n"
-            "Either pass --from-jsonl / --demo, or provide UnrealEditor-Cmd.exe, e.g.\n"
+            "Either pass --from-yaml / --demo, or provide UnrealEditor-Cmd.exe, e.g.\n"
             "  ual-cli build --project Ann --engine-cmd C:/UE/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
         )
     project = Path(args.project or ".").resolve()
@@ -70,18 +69,18 @@ def _run_ue_commandlet(args: argparse.Namespace) -> list[Path]:
     completed = subprocess.run(cmd, cwd=str(project), capture_output=True, text=True)
     if completed.returncode != 0:
         raise SystemExit(f"ual-cli: Commandlet failed ({completed.returncode}):\n{completed.stderr[-2000:]}")
-    return sorted(staging.glob("*.jsonl"))
+    return sorted(staging.glob("*.yaml"))
 
 
 def cmd_build(args: argparse.Namespace) -> int:
     if args.demo:
         sources = [SEED]
-    elif args.from_jsonl:
-        sources = [Path(args.from_jsonl)]
+    elif args.from_yaml:
+        sources = [Path(args.from_yaml)]
     else:
         sources = _run_ue_commandlet(args)
     if not sources:
-        raise SystemExit("ual-cli: no JSONL staging files produced by the Commandlet")
+        raise SystemExit("ual-cli: no YAML staging files produced by the Commandlet")
 
     existing: dict[str, str] = {}
     if args.incremental and db.resolve_index(args.index).exists():
@@ -93,7 +92,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     total = {"assets": 0, "edges": 0}
     skipped = 0
     for source in sources:
-        records = db.load_jsonl(source)
+        records = db.load_yaml_docs(source)
         if args.incremental and existing:
             before = len(records)
             records = [r for r in records if existing.get(r.get("asset_path")) != r.get("content_hash")]
@@ -264,7 +263,7 @@ def cmd_export_parquet(args: argparse.Namespace) -> int:
 def cmd_self_test(args: argparse.Namespace) -> int:
     tmp = Path(tempfile.gettempdir()) / "ual_cli_self_test.duckdb"
     tmp.unlink(missing_ok=True)
-    build = argparse.Namespace(demo=True, from_jsonl=None, index=str(tmp), incremental=False,
+    build = argparse.Namespace(demo=True, from_yaml=None, index=str(tmp), incremental=False,
                                project=None, engine_cmd=None)
     rc = cmd_build(build)
     if rc != 0:
@@ -312,7 +311,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("build", help="Build/update the DuckDB index")
     p.add_argument("--project", default=None, help="UE project root")
     p.add_argument("--engine-cmd", default=None, help="Path to UnrealEditor-Cmd.exe")
-    p.add_argument("--from-jsonl", default=None, help="Ingest a Commandlet JSONL file")
+    p.add_argument("--from-yaml", default=None, help="Ingest a Commandlet YAML document stream")
     p.add_argument("--demo", action="store_true", help="Ingest bundled demo seed (no UE required)")
     p.add_argument("--incremental", action="store_true", help="Skip unchanged content_hash")
     p.set_defaults(func=cmd_build)

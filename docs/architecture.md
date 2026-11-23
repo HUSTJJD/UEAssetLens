@@ -13,7 +13,7 @@
 | `FUALExtractorRegistry` | 按 `AssetClass` 分派 | 优先级 100 的领域提取器优先，优先级 0 的通用兜底保底（不设类型白名单） |
 | `FUniversalReflectionExtractor` | 任意 `AssetClass`，含未知类型 | 只读 `FAssetData.TagsAndValues`，剥离 `SM_/AM_/T_/MI_/BP_/WBP_` 前缀做分词，生成 `logical_id`、`taxonomy`、`tokens`、`content_hash` 与 16 维指纹；taxonomy 由共享规则表生成 |
 
-写入通过 `IUALIndexSink` 抽象。本仓库提供可无第三方库编译的 `UALJsonlIndexSink`（写 `.ual/staging/*.jsonl`）；生产环境的 DuckDB C API Appender 实现需随 ThirdParty 提供，尚未附带。Python 侧 `ual-cli build --from-jsonl` 负责灌库。
+写入通过 `IUALIndexSink` 抽象。本仓库提供可无第三方库编译的 `UALYamlIndexSink`（写 `.ual/staging/*.yaml`）；生产环境的 DuckDB C API Appender 实现需随 ThirdParty 提供，尚未附带。Python 侧 `ual-cli build --from-yaml` 负责灌库。
 
 ### 1.1 为什么能覆盖所有资产类型
 
@@ -23,7 +23,7 @@
 2. **提取层兜底**：`FUALExtractorRegistry::FallbackExtractor` 是 `FUniversalReflectionExtractor`，`CanExtract()` 恒返回 `true`。领域提取器（Priority 100）只是增强，不是准入门槛。
 3. **存储层不设枚举**：`assets.asset_class` 是 `VARCHAR`，`taxonomy` 是 `VARCHAR[]`；`ual_common/db.py` 在记录缺 taxonomy 时按规则补全，并在 `logical_id` 与已有记录冲突时追加确定性路径哈希，避免 `UNIQUE` 约束把新类型资产挡在门外。
 
-`taxonomy` 的唯一事实源是 `Server/ual_common/taxonomy.json`：`ual_common/taxonomy.py` 直接读取它，`Tools/gen_taxonomy.py` 把它渲染成 `Source/UEAssetLensEditor/Public/UALTaxonomyRules.h`。两侧均为大小写敏感的有序子串匹配，未命中规则落入 `Misc` 族，但**仍然入索引**。新增 UE 资产类型族只需改 JSON 并重跑生成器，`--check` 负责阻止生成物漂移。
+`taxonomy` 的唯一事实源是 `Server/ual_common/taxonomy.yaml`：`ual_common/taxonomy.py` 直接读取它，`Tools/gen_taxonomy.py` 把它渲染成 `Source/UEAssetLensEditor/Public/UALTaxonomyRules.h`。两侧均为大小写敏感的有序子串匹配，未命中规则落入 `Misc` 族，但**仍然入索引**。新增 UE 资产类型族只需改 JSON 并重跑生成器，`--check` 负责阻止生成物漂移。
 
 边界：这只覆盖元数据层。领域深度字段（顶点直方图、材质参数聚类等）仍由 M2 负责，见 `known-limitations.md` §3 / §14。
 
@@ -31,9 +31,9 @@
 
 唯一事实源是 `.ual/index.duckdb`。已在 **DuckDB 2.0.0** 实测：`FLOAT[3]`、`FLOAT[16]`、`VARCHAR[]`、`MAP(VARCHAR,VARCHAR)`、`PRAGMA create_fts_index`、`array_cosine_similarity()` 均可用。
 
-### 2.1 C++ → Python 的 staging JSONL（硬契约）
+### 2.1 C++ → Python 的 staging YAML 文档流（硬契约）
 
-UE 侧 `UALJsonlIndexSink` 不直接写 DuckDB，而是输出 `.ual/staging/<name>.jsonl`：一行一个 JSON 对象、键名 snake_case、顶层恰好 16 个键，再由 `ual-cli build --from-jsonl` upsert 入表。权威定义见 `Server/schema/PROTOCOL.md` §1。
+UE 侧 `UALYamlIndexSink` 不直接写 DuckDB，而是输出 `.ual/staging/<name>.yaml`：一个 YAML 文档、键名 snake_case、顶层恰好 16 个键，再由 `ual-cli build --from-yaml` upsert 入表。权威定义见 `Server/schema/PROTOCOL.md` §1。
 
 | 键 | 类型 | 说明 |
 | --- | --- | --- |
@@ -137,7 +137,7 @@ UE 的二进制重存（重新导入、引擎升级、Cook、序列化顺序变�
 
 宿主源码树（UE6，`BranchName: UE6`）随附 Epic 第一方 `ModelContextProtocol` 插件（`FriendlyName: Unreal MCP`，`IsExperimentalVersion: true`，`EnabledByDefault: false`）。它在编辑器进程内提供 HTTP loopback server（`http://127.0.0.1:8000/mcp`），有完整的 `AddTool` / `OnRefreshTools` / ResourceProvider 扩展点，并可选通过 `ToolsetRegistry` 暴露数十个内置工具集。
 
-UAL 用 **`IModelContextProtocolModule::AddTool`** 把 4 个工具直接注册进该 server，而不是自定义 `UToolsetDefinition`。原因是 `ModelContextProtocolToolsetRegistryAdapter` 会把工具名限定为 `<ToolsetName>.<ToolName>`；UAL 的 4 个名称是 `PROTOCOL.md` 之外的另一份对外契约（Python MCP Server、`tool_schemas.json`、生成文档三处共用），不能被改写。此外 4 个工具全部只读，不需要 Toolset 的权限分级与元工具发现机制。
+UAL 用 **`IModelContextProtocolModule::AddTool`** 把 4 个工具直接注册进该 server，而不是自定义 `UToolsetDefinition`。原因是 `ModelContextProtocolToolsetRegistryAdapter` 会把工具名限定为 `<ToolsetName>.<ToolName>`；UAL 的 4 个名称是 `PROTOCOL.md` 之外的另一份对外契约（Python MCP Server、`tool_schemas.yaml`、生成文档三处共用），不能被改写。此外 4 个工具全部只读，不需要 Toolset 的权限分级与元工具发现机制。
 
 调用链：
 
@@ -148,7 +148,7 @@ UAL 用 **`IModelContextProtocolModule::AddTool`** 把 4 个工具直接注册�
 | `engine_bridge.py` | 白名单分派到 `ual_mcp/tools.py` 的 4 个函数，返回 TOON / YAML 文本 |
 | `.ual/index.duckdb` | 只读，与 `ual-cli`、独立 Python MCP Server 共用同一份索引 |
 
-`Server/ual_mcp/tool_schemas.json` 由 `Tools/gen_docs.py` 从 `TOOL_DEFS` 生成，是工具名、描述与 `inputSchema` 的唯一事实源；`--check` 同时保护它与 5 个生成页面，任何一侧漂移都会让 CI 失败。
+`Server/ual_mcp/tool_schemas.yaml` 由 `Tools/gen_docs.py` 从 `TOOL_DEFS` 生成，是工具名、描述与 `inputSchema` 的唯一事实源；`--check` 同时保护它与 5 个生成页面，任何一侧漂移都会让 CI 失败。
 
 这形成**双通道、单一索引**：编辑器开着时 Agent 走官方 HTTP server；CI、无头构建机与无编辑器环境仍走 `ual-cli` / 独立 Python MCP。官方 server 不能替代后者——它依赖编辑器进程、仅 loopback、无认证、标记为实验性，且无法在构建机上运行 `lint-duplicates` 或 `verify-references`。
 

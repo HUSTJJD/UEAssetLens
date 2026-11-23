@@ -16,38 +16,42 @@ DDL 见 `init.sql`。要点：
 
 - `fingerprint_vec FLOAT[16]` 固定 16 维，缺失值写 `NULL`（不写全零，全零会导致余弦相似度退化）。
 - `content_hash` **只用于增量变更检测**，不用于查重。`.uasset` 重存会改变二进制哈希但语义未变。
-- `interface_spec` / `domain_spec` 是 `MAP(VARCHAR,VARCHAR)`，数值类型被擦除。约定：标量写纯文本，向量写 `[a,b,c]`，列表/对象写 JSON 字符串。读取方按 key 契约解析。
+- `interface_spec` / `domain_spec` 是 `MAP(VARCHAR,VARCHAR)`，数值类型被擦除。约定：标量写纯文本，向量写 `[a,b,c]`，列表/对象写 **YAML 文本片段**（如 `"[hand_r_weapon]"`、`"{windup: [0.0, 0.35]}"`），不再是 JSON 字符串。读取方 `yamlspec.py` 用 `yaml.safe_load` 按 key 契约解析。
 - FTS 索引是快照，`INSERT` 不自动维护；每次批量灌库后必须执行 `rebuild_fts.sql`。
 - `array_cosine_similarity` 需要 DuckDB ≥ 1.1；已在 2.0.0 实测通过。
 
-### C++ → Python 的 JSONL 交换契约
+### C++ → Python 的 YAML 交换契约
 
-UE 侧 `UALJsonlIndexSink` 写入 `.ual/staging/*.jsonl`，一行一个 JSON 对象。键名严格如下（snake_case，缺字段按默认值补齐）：
+UE 侧 `UALYamlIndexSink` 写入 `.ual/staging/*.yaml`，`---` 分隔的多文档流，**一个文档一个资产**。键名严格如下（snake_case，缺字段按默认值补齐）。C++ 用 `FJsonObject` 作内存 DOM，经 `UEYaml.h`（共享插件 UEYaml） 的 emitter 落盘；所有字符串显式双引号，含 `:` / `#` / `/` / `(` / `[` / `"` 的值必须加引号。
 
-```json
-{
-  "asset_path": "/Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02",
-  "logical_id": "AnimMontage:AM_Knight_HeavySlash_02",
-  "asset_class": "AnimMontage",
-  "parent_class": "AnimSequenceBase",
-  "taxonomy": ["Asset", "Animation", "Montage"],
-  "tokens": "knight heavy slash combat",
-  "content_hash": "sha1:...",
-  "duration": 1.15,
-  "bounds_size": [0.0, 0.0, 0.0],
-  "skeleton_path": "/Game/Characters/Knight/SK_Knight",
-  "dominant_limb": "hand_r",
-  "fingerprint_vec": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-  "interface_spec": {"skeleton": "/Game/Characters/Knight/SK_Knight"},
-  "domain_spec": {"duration": "1.15", "phases": "{\"windup\":[0.0,0.35]}"},
-  "yaml_cache": "# UEAssetLens AssetSpec v2.0 ...",
-  "edges": [{"target_path": "/Game/VFX/NS_Slash_Heavy", "edge_type": "CO_OCCURS", "weight": 0.88}]
-}
+```yaml
+---
+"asset_path": "/Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02"
+"logical_id": "AnimMontage:AM_Knight_HeavySlash_02"
+"asset_class": "AnimMontage"
+"parent_class": "AnimSequenceBase"
+"taxonomy": ["Asset", "Animation", "Montage"]
+"tokens": "knight heavy slash combat"
+"content_hash": "sha1:..."
+"duration": 1.15
+"bounds_size": [0.0, 0.0, 0.0]
+"skeleton_path": "/Game/Characters/Knight/SK_Knight"
+"dominant_limb": "hand_r"
+"fingerprint_vec": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+"interface_spec":
+  "skeleton": "/Game/Characters/Knight/SK_Knight"
+  "sockets_referenced": "[hand_r_weapon]"
+"domain_spec":
+  "duration": "1.15"
+  "forward_cm": "185.0"
+  "phases": "{windup: [0.0, 0.35]}"
+"yaml_cache": "# UEAssetLens AssetSpec v2.0 ..."
+"edges": [{"target_path": "/Game/VFX/NS_Slash_Heavy", "edge_type": "CO_OCCURS", "weight": 0.88}]
 ```
 
-注意区分两层：**staging JSONL 是交换格式（16 个键，不含 `updated_at`）**，DuckDB `assets` 表才是持久化结构。`updated_at` 由灌库侧的 `DEFAULT CURRENT_TIMESTAMP` 填充，C++ 侧不写入，以保证 YAML/TOON 输出不含时间戳、Git Diff 稳定。
+注意区分两层：**staging YAML 文档流是交换格式（16 个键，不含 `updated_at`）**，DuckDB `assets` 表才是持久化结构。`updated_at` 由灌库侧的 `DEFAULT CURRENT_TIMESTAMP` 填充，C++ 侧不写入，以保证 YAML/TOON 输出不含时间戳、Git Diff 稳定。YAML 缩进敏感：单个文档语法/缩进错误会让整批灌库失败，`-Incremental` 发现哈希数异常偏少时应回退全量重建。
 
-`ual-cli build --from-jsonl <path>` 负责 upsert（`ON CONFLICT ... DO UPDATE`）、写入 `asset_edges`、重建 FTS 索引。
+`ual-cli build --from-yaml <path>` 负责 upsert（`ON CONFLICT ... DO UPDATE`）、写入 `asset_edges`、重建 FTS 索引。
 
 `domain_spec` 中约定以下键供检索层直接投影（不新增物理列，保持 DDL 与规格 §3.1 一致）：
 
@@ -55,9 +59,9 @@ UE 侧 `UALJsonlIndexSink` 写入 `.ual/staging/*.jsonl`，一行一个 JSON 对
 |---|---|---|
 | `forward_cm` | 纯数字字符串，如 `"185.0"` | `filters.min_forward_cm` / `max_forward_cm` 硬约束 |
 | `strike_window` | `"0.35..0.58"` | TOON `strike_window` 字段 |
-| `root_motion_delta` | `"[185.0,0.0,0.0]"` | YAML 运动学位移 |
-| `phases` | JSON 字符串 | YAML 三相位区间 |
-| `notifies` | JSON 字符串 | YAML Notify 列表 |
+| `root_motion_delta` | YAML 向量文本 `"[185.0, 0.0, 0.0]"` | YAML 运动学位移 |
+| `phases` | YAML 文本片段（流式映射） | YAML 三相位区间 |
+| `notifies` | YAML 文本片段（流式列表） | YAML Notify 列表 |
 | `hint` | `"Once\|1.2s\|User.SlashColor"` | TOON `hint` 字段 |
 
 `init.sql` 中的 `v_search` 视图用 `TRY_CAST(domain_spec['forward_cm'] AS DOUBLE)` 把这些键投影为可过滤列。
@@ -76,7 +80,7 @@ UE 侧 `UALJsonlIndexSink` 写入 `.ual/staging/*.jsonl`，一行一个 JSON 对
 
 ## 3. L3：TOON 批量格式（UAL 自定义方言）
 
-TOON = Token-Oriented Object Notation。**头部一次性声明字段 Schema，数据行紧凑排列**，避免 JSON 重复的 key 与括弧开销，节省 40%~60% 上下文 Token。
+TOON = Token-Oriented Object Notation。**头部一次性声明字段 Schema，数据行紧凑排列**，避免重复的 key 与括弧开销，节省 40%~60% 上下文 Token。
 
 ### 语法
 
@@ -120,4 +124,7 @@ candidates[3]{logical_id,duration,forward_cm,strike_window,limb,score}:
 
 - TOON 是 UAL 自定义方言，不是社区 TOON 标准；`ual_common/toon.py` 是唯一编解码实现，禁止在别处手写拼接。
 - YAML 生成器同样唯一：`ual_common/yamlspec.py`。
+- 插件自有数据格式一次性硬切为 YAML：业务配置 `taxonomy.yaml` / `tool_schemas.yaml`、staging `.yaml` 多文档流；不存在 `.json` / `.jsonl` 双读兼容层。Python 侧统一 `yaml.safe_load` / `safe_load_all` / `safe_dump`。
+- C++ 侧交换格式序列化唯一走 `Plugins/UEYaml/Source/UEYaml/Public/UEYaml.h`（`FJsonObject` 作内存 DOM，ryml `parse_in_place` 读取 + 自写 emitter 写出），禁止手工拼接请求/记录字符串。
+- MCP 协议层与 JSON-RPC 属豁免：`inputSchema` 仍是 JSON Schema 对象（由 `tool_schemas.yaml` 解析成 `FJsonObject` 喂给 SDK），`GetInputJsonSchema()` / `Run(FJsonObject)` 为 Epic `IModelContextProtocolTool` 强制虚函数签名，`UALEngineMcpModule.cpp` 解析后仍构造 `FJsonObject`。
 - 任何字段变更必须同步修改本文件、`init.sql`、C++ `UALTypes.h` 与 Python `db.py`，并提交协议版本号递增。

@@ -17,7 +17,7 @@ Build/update the DuckDB index
 | --- | --- | --- | --- |
 | `--project` |  |  | UE project root |
 | `--engine-cmd` |  |  | Path to UnrealEditor-Cmd.exe |
-| `--from-jsonl` |  |  | Ingest a Commandlet JSONL file |
+| `--from-yaml` |  |  | Ingest a Commandlet YAML document stream |
 | `--demo` | `flag` |  | Ingest bundled demo seed (no UE required) |
 | `--incremental` | `flag` |  | Skip unchanged content_hash |
 

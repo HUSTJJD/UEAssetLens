@@ -2,9 +2,17 @@ UEAssetLens - Third-Party Notices
 =================================
 
 UEAssetLens itself is distributed under the MIT License (see LICENSE).
-The source distribution bundles no third-party source code; the following
-components are resolved at install time by the user and retain their own
-licences:
+
+Bundled third-party source code:
+  - rapidyaml (ryml) v0.9.0   MIT License   https://github.com/biojppm/rapidyaml
+    Vendored ONCE by the shared UEYaml plugin at
+    Plugins/UEYaml/ThirdParty/RapidYaml/ryml_all.hpp; full licence text in
+    Plugins/UEYaml/ThirdParty/RapidYaml/LICENSE.txt and Plugins/UEYaml/LICENSE.txt.
+    UEAssetLens depends on UEYaml (UEYaml.h) instead of shipping its own copy;
+    UEYaml is the sole owner of the rapidyaml implementation in this project.
+
+The following components are resolved at install time by the user and retain
+their own licences:
 
   Python runtime dependencies (see requirements.txt)
     - duckdb            MIT License            https://github.com/duckdb/duckdb
@@ -13,6 +21,7 @@ licences:
     - pytest            MIT License            https://github.com/pytest-dev/pytest
 
   Documentation toolchain (see requirements-docs.txt)
+    - PyYAML            MIT License            https://github.com/yaml/pyyaml
     - mkdocs-material   MIT License            https://github.com/squidfunk/mkdocs-material
 
   Unreal Engine

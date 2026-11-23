@@ -2,7 +2,8 @@
 
 #include "UALExtractorRegistry.h"
 #include "FUniversalReflectionExtractor.h"
-#include "UALJsonlIndexSink.h"
+#include "UALYamlIndexSink.h"
+#include "UEYaml.h"
 #include "UALTypes.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -17,8 +18,6 @@
 #include "HAL/FileManager.h"
 #include "Modules/ModuleManager.h"
 #include "Dom/JsonObject.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUALIndexBuilder, Log, All);
 
@@ -78,7 +77,7 @@ TMap<FString, FString> UUALIndexBuilderCommandlet::LoadExistingHashes(const FStr
 
 	TArray<FString> Files;
 	IFileManager::Get().FindFiles(Files,
-		*FPaths::Combine(StagingDir, TEXT("*.jsonl")), /*Files=*/true, /*Directories=*/false);
+		*FPaths::Combine(StagingDir, TEXT("*.yaml")), /*Files=*/true, /*Directories=*/false);
 
 	for (const FString& File : Files)
 	{
@@ -89,24 +88,20 @@ TMap<FString, FString> UUALIndexBuilderCommandlet::LoadExistingHashes(const FStr
 			continue;
 		}
 
-		TArray<FString> Lines;
-		Content.ParseIntoArrayLines(Lines);
-		for (const FString& Line : Lines)
+		// YAML 是缩进敏感的多文档流：单个文档缩进/语法错误会让整批灌库失败。
+		// ParseStream 按列 0 的 "---" 切分后逐文档解析；损坏文档会被跳过，
+		// 因此 -Incremental 发现哈希数异常偏少时应回退为全量重建。
+		const TArray<TSharedPtr<FJsonObject>> Docs = UEYaml::ParseStream(Content);
+		for (const TSharedPtr<FJsonObject>& Doc : Docs)
 		{
-			if (Line.TrimStartAndEnd().IsEmpty())
-			{
-				continue;
-			}
-			TSharedPtr<FJsonObject> Obj;
-			TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Line);
-			if (!FJsonSerializer::Deserialize(Reader, Obj) || !Obj.IsValid())
+			if (!Doc.IsValid())
 			{
 				continue;
 			}
 			FString Path;
 			FString Hash;
-			if (Obj->TryGetStringField(TEXT("asset_path"), Path) &&
-				Obj->TryGetStringField(TEXT("content_hash"), Hash))
+			if (Doc->TryGetStringField(TEXT("asset_path"), Path) &&
+				Doc->TryGetStringField(TEXT("content_hash"), Hash))
 			{
 				Result.Add(Path, Hash);
 			}
@@ -181,8 +176,8 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 			ExistingHashes.Num());
 	}
 
-	// 5) 打开 Sink（生产为 DuckDB C API Appender，这里为 JSONL 参考实现）。
-	FUALJsonlIndexSink Sink(OutName, ProjectDir);
+	// 5) 打开 Sink（生产为 DuckDB C API Appender，这里为 YAML 文档流参考实现）。
+	FUALYamlIndexSink Sink(OutName, ProjectDir);
 	if (!Sink.Begin())
 	{
 		UE_LOG(LogUALIndexBuilder, Error, TEXT("Failed to open index sink."));

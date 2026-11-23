@@ -5,11 +5,11 @@
 #include "UALTypes.h"
 
 // ---------------------------------------------------------------------------
-// FUALJsonlIndexSink：把记录写成 .ual/staging/<name>.jsonl，一行一个 JSON 对象，
-// 供 Python 侧灌入 DuckDB。
+// FUALYamlIndexSink：把记录写成 .ual/staging/<name>.yaml，一个文档一个资产，
+// 文档之间用 "---" 分隔，供 Python 侧灌入 DuckDB。
 //
 // 【硬契约 · 与并行 Python 侧严格一致，键名一律 snake_case，不得增删改】
-// 每行顶层恰好包含以下 16 个键：
+// 每个文档顶层恰好包含以下 16 个键：
 //   asset_path, logical_id, asset_class, parent_class,
 //   taxonomy(字符串数组), tokens(空格连接的单个字符串 / VARCHAR), content_hash, duration,
 //   bounds_size(3 元浮点数组), skeleton_path, dominant_limb,
@@ -19,20 +19,21 @@
 //   edges(数组；元素含 target_path / edge_type / weight)
 //
 // 说明：
-//   * edges 按 source_path 聚合进对应资产行；source 即该行的 asset_path。
+//   * edges 按 source_path 聚合进对应资产文档；source 即该文档的 asset_path。
 //   * updated_at 不在本契约内，由 Python 灌库侧以 CURRENT_TIMESTAMP 填充；
 //     生产用的 DuckDB C API Appender 则直接写 FUALAssetRecord::UpdatedAt。
-//   * 生产实现是 DuckDB C API Appender（直接写 .ual/index.duckdb）；JSONL 是
-//     无需引入任何第三方头文件、仅依赖 UE Json 模块即可编译验证的参考实现。
+//   * 生产实现是 DuckDB C API Appender（直接写 .ual/index.duckdb）；YAML
+//     文档流是无需第三方编译库、仅依赖 UE Json 模块与随仓 RapidYaml 单头文件
+//     即可编译验证的参考实现。FJsonObject 仍是内存 DOM。
 //
 // 实现策略：AppendRecord / AppendEdge 先缓存，Commit 时按 source_path 把 edges
-// 合并进对应资产行，再一次性写出，保证"一行一个完整资产对象"。
+// 合并进对应资产文档，再一次性写出，保证"一个文档一个完整资产对象"。
 // ---------------------------------------------------------------------------
-class FUALJsonlIndexSink : public IUALIndexSink
+class FUALYamlIndexSink : public IUALIndexSink
 {
 public:
-	explicit FUALJsonlIndexSink(const FString& InName, const FString& InProjectDir);
-	virtual ~FUALJsonlIndexSink();
+	explicit FUALYamlIndexSink(const FString& InName, const FString& InProjectDir);
+	virtual ~FUALYamlIndexSink();
 
 	virtual bool Begin() override;
 	virtual void AppendRecord(const FUALAssetRecord& Record) override;
@@ -40,7 +41,7 @@ public:
 	virtual bool Commit() override;
 
 private:
-	FString BuildRecordJson(const FUALAssetRecord& Record,
+	FString BuildRecordYaml(const FUALAssetRecord& Record,
 		const TArray<const FUALEdgeRecord*>& RowEdges) const;
 
 	FString Name;

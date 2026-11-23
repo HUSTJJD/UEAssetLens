@@ -27,7 +27,7 @@
 
 ## 2. DuckDB C API Appender 未附带
 
-生产写入路径设计为 C++ Appender 高速列式写入；当前随仓的是 `UALJsonlIndexSink` → Python `ingest_records()` 参数化 upsert。正确性优先，吞吐与冷建库耗时未压到目标区间。`IUALIndexSink` 已留好替换点。
+生产写入路径设计为 C++ Appender 高速列式写入；当前随仓的是 `UALYamlIndexSink` → Python `ingest_records()` 参数化 upsert。正确性优先，吞吐与冷建库耗时未压到目标区间。`IUALIndexSink` 已留好替换点。
 
 ## 3. 领域提取器 M2 未全量实现
 
@@ -99,7 +99,7 @@ DuckDB FTS 不随 `INSERT` 自动更新。`ual-cli build` 每次灌库后调用 
 
 **影响**：未安装或安装了 1.x SDK 的环境无法启动 Python MCP Server，进程打印可读错误并以退出码 2 结束。离线/受限环境不再有"能跑但语义不完整"的第三条路径。
 
-**决策依据**：手写实现缺少 resources / prompts / 分页 / 协议版本协商，而官方 SDK v2 已能同时服务 2025 与 2026 两代协议修订；维护第三套协议语义的收益低于风险。工具名、描述与 `inputSchema` 的唯一事实源已迁至 `tools.py::TOOL_DEFS`，由 `gen_docs.py` 生成 `tool_schemas.json` 供 C++ 引擎内工具使用，并校验与 `server.py` 注册函数一致。
+**决策依据**：手写实现缺少 resources / prompts / 分页 / 协议版本协商，而官方 SDK v2 已能同时服务 2025 与 2026 两代协议修订；维护第三套协议语义的收益低于风险。工具名、描述与 `inputSchema` 的唯一事实源已迁至 `tools.py::TOOL_DEFS`，由 `gen_docs.py` 生成 `tool_schemas.yaml` 供 C++ 引擎内工具使用，并校验与 `server.py` 注册函数一致。
 
 **当前缓解**：无 SDK 的离线/CI 场景本来就走 `ual-cli`（`build` / `lint-duplicates` / `verify-references` / `export-parquet`），不依赖 MCP；`ual_mcp/server.py --self-test` 也不导入 SDK，可在纯 DuckDB 环境验证 4 个工具的输出。
 
@@ -112,7 +112,7 @@ DuckDB FTS 不随 `INSERT` 自动更新。`ual-cli build` 每次灌库后调用 
 | 项 | 改动 | 验证状态 |
 | --- | --- | --- |
 | 扫描范围 | Commandlet 新增 `-Roots=/Game,/PluginA` 与 `-IncludePlugins`（自动纳入所有含内容插件的挂载根），按 `PackageName` 去重 | Python 侧无对应运行时；**C++ 未编译验证** |
-| taxonomy | 硬编码 10 族改为 `Server/ual_common/taxonomy.json`（24 族）单一事实源；Python `ual_common/taxonomy.py` 与生成头 `UALTaxonomyRules.h` 共用；未命中落 `Misc` | pytest 覆盖 27 种类型 + `Tools/gen_taxonomy.py --check` 漂移门禁 |
+| taxonomy | 硬编码 10 族改为 `Server/ual_common/taxonomy.yaml`（24 族）单一事实源；Python `ual_common/taxonomy.py` 与生成头 `UALTaxonomyRules.h` 共用；未命中落 `Misc` | pytest 覆盖 27 种类型 + `Tools/gen_taxonomy.py --check` 漂移门禁 |
 | `logical_id` 碰撞 | `ual_common/db.py` 在冲突且 `asset_path` 不同时追加确定性 8 字符路径哈希 | pytest 覆盖重复灌库的幂等性 |
 
 **仍然存在的限制**：

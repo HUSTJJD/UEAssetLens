@@ -38,13 +38,13 @@ python Server/ual_cli/ual_cli.py lint-duplicates --threshold 0.85 --diff-only
 | --- | --- | --- |
 | 存在任一 `similarity >= threshold` 的资产对 | stdout 打印 YAML 审计，stderr 打印 `BLOCKED` | **1** |
 | 无超阈值对，或 `--diff-only` 未发现新增资产 | 打印 `PASS` | 0 |
-| 索引缺失 | stderr 打印引导信息（`--demo` / `--from-jsonl`） | 2 |
+| 索引缺失 | stderr 打印引导信息（`--demo` / `--from-yaml`） | 2 |
 
 门禁**不会自动删除或合并资产**，只阻断合入并给出候选清单。
 
 ## 2. `verify-references`：引用完整性门禁
 
-扫描 `--scan-dirs` 下的 `.yaml` / `.yml` / `.json` / `.luau` / `.lua`，做三类静态校验：
+扫描 `--scan-dirs` 下的 `.yaml` / `.yml` / `.luau` / `.lua`，做三类静态校验：
 
 | 类别 | 实现方式 | 已知边界 |
 | --- | --- | --- |
@@ -68,7 +68,7 @@ python Server/ual_cli/ual_cli.py verify-references --scan-dirs Content/Abilities
 name: ual-ci-gates
 on:
   pull_request:
-    paths: ['Content/**', '**/*.yaml', '**/*.json', '**/*.luau', 'Server/**']
+    paths: ['Content/**', '**/*.yaml', '**/*.luau', 'Server/**']
 jobs:
   gates:
     runs-on: windows-latest

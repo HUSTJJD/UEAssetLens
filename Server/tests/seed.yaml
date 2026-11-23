@@ -1,0 +1,424 @@
+---
+asset_path: /Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02
+logical_id: AnimMontage:AM_Knight_HeavySlash_02
+asset_class: AnimMontage
+parent_class: AnimMontage
+taxonomy:
+- Asset
+- Animation
+- Montage
+- Combat
+tokens: am knight heavyslash 02 knight heavy slash combat sword
+content_hash: sha1:AM_Knight_HeavySlash_02
+duration: 1.15
+bounds_size:
+- 0.0
+- 0.0
+- 0.0
+skeleton_path: /Game/Characters/Knight/SK_Knight
+dominant_limb: hand_r
+fingerprint_vec:
+- 0.22999999999999998
+- 1.0
+- 0.0
+- 0.0
+- 0.55
+- 0.12
+- 0.08
+- 0.25
+- 0.05
+- 0.15
+- 0.35
+- 0.9
+- 0.7
+- 0.2
+- 0.08
+- 0.03
+interface_spec:
+  skeleton: /Game/Characters/Knight/SK_Knight
+  sockets_referenced: '[hand_r_weapon]'
+  material_slots: '[]'
+domain_spec:
+  forward_cm: '185.0'
+  strike_window: 0.35..0.58
+  root_motion_delta: '[185.0, 0.0, 0.0]'
+  phases: '{windup: [0.0, 0.35], active_strike: [0.35, 0.58], recovery: [0.58, 1.15]}'
+  notifies: '[{name: ANS_WeaponTrail, start: 0.32, duration: 0.28}, {name: AN_HitCheck, time: 0.44}]'
+  kinematics: '{peak_velocity: 425.5, is_airborne: false, dominant_limbs: [hand_r, spine_03]}'
+edges:
+- target_path: /Game/VFX/NS_Slash_Heavy
+  edge_type: CO_OCCURS
+  weight: 0.88
+- target_path: /Game/Audio/SFX_Sword_Heavy
+  edge_type: CO_OCCURS
+  weight: 0.92
+- target_path: /Game/Characters/Knight/SK_Knight
+  edge_type: DEPENDS_ON
+  weight: 1.0
+yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: AnimMontage:AM_Knight_HeavySlash_02\n  asset_path: /Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02\n  asset_class: AnimMontage\n  parent_class: AnimMontage\n  taxonomy: [Asset, Animation, Montage, Combat]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: /Game/Characters/Knight/SK_Knight\n  sockets_referenced: [hand_r_weapon] # weapon / hitbox attach candidates\n  material_slots: []\n\ndomain_spec:\n  duration: 1.15 # unit: seconds\n  kinematics:\n    root_motion_delta: [185, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 185\n    peak_velocity: 425.5\n    is_airborne: false\n    dominant_limbs: [hand_r, spine_03] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0.35] # auto-split from kinetic peaks\n    active_strike: [0.35, 0.58] # auto-split from kinetic peaks\n    recovery: [0.58, 1.15] # auto-split from kinetic peaks\n  strike_window: 0.35..0.58\n  notifies:\n    - { name: ANS_WeaponTrail, start: 0.32, duration: 0.28 }\n    - { name: AN_HitCheck, time: 0.44 }\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 1\n  top_referencers: [/Game/Combat/Abilities/GA_Knight_Combo2]\n"
+---
+asset_path: /Game/Characters/Knight/Anim/AM_Knight_HeavySlash_03
+logical_id: AnimMontage:AM_Knight_HeavySlash_03
+asset_class: AnimMontage
+parent_class: AnimMontage
+taxonomy:
+- Asset
+- Animation
+- Montage
+- Combat
+tokens: am knight heavyslash 03 knight heavy slash combat sword
+content_hash: sha1:AM_Knight_HeavySlash_03
+duration: 1.16
+bounds_size:
+- 0.0
+- 0.0
+- 0.0
+skeleton_path: /Game/Characters/Knight/SK_Knight
+dominant_limb: hand_r
+fingerprint_vec:
+- 0.23199999999999998
+- 1.0
+- 0.0
+- 0.0
+- 0.54
+- 0.13
+- 0.08
+- 0.25
+- 0.05
+- 0.16
+- 0.34
+- 0.89
+- 0.71
+- 0.2
+- 0.08
+- 0.03
+interface_spec:
+  skeleton: /Game/Characters/Knight/SK_Knight
+  sockets_referenced: '[hand_r_weapon]'
+  material_slots: '[]'
+domain_spec:
+  forward_cm: '183.0'
+  strike_window: 0.35..0.59
+  root_motion_delta: '[183.0, 0.0, 0.0]'
+  phases: '{windup: [0.0, 0.35], active_strike: [0.35, 0.59], recovery: [0.59, 1.16]}'
+  notifies: '[{name: ANS_WeaponTrail, start: 0.32, duration: 0.28}, {name: AN_HitCheck, time: 0.45}]'
+  kinematics: '{peak_velocity: 420.9, is_airborne: false, dominant_limbs: [hand_r, spine_03]}'
+edges: []
+yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: AnimMontage:AM_Knight_HeavySlash_03\n  asset_path: /Game/Characters/Knight/Anim/AM_Knight_HeavySlash_03\n  asset_class: AnimMontage\n  parent_class: AnimMontage\n  taxonomy: [Asset, Animation, Montage, Combat]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: /Game/Characters/Knight/SK_Knight\n  sockets_referenced: [hand_r_weapon] # weapon / hitbox attach candidates\n  material_slots: []\n\ndomain_spec:\n  duration: 1.16 # unit: seconds\n  kinematics:\n    root_motion_delta: [183, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 183\n    peak_velocity: 420.9\n    is_airborne: false\n    dominant_limbs: [hand_r, spine_03] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0.35] # auto-split from kinetic peaks\n    active_strike: [0.35, 0.59] # auto-split from kinetic peaks\n    recovery: [0.59, 1.16] # auto-split from kinetic peaks\n  strike_window: 0.35..0.59\n  notifies:\n    - { name: ANS_WeaponTrail, start: 0.32, duration: 0.28 }\n    - { name: AN_HitCheck, time: 0.45 }\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 0\n  top_referencers: []\n"
+---
+asset_path: /Game/Characters/Knight/Anim/AM_Knight_DashThrust_01
+logical_id: AnimMontage:AM_Knight_DashThrust_01
+asset_class: AnimMontage
+parent_class: AnimMontage
+taxonomy:
+- Asset
+- Animation
+- Montage
+- Combat
+tokens: am knight dashthrust 01 knight heavy slash combat sword
+content_hash: sha1:AM_Knight_DashThrust_01
+duration: 0.9
+bounds_size:
+- 0.0
+- 0.0
+- 0.0
+skeleton_path: /Game/Characters/Knight/SK_Knight
+dominant_limb: hand_r
+fingerprint_vec:
+- 0.18
+- 1.0
+- 0.0
+- 0.0
+- 0.2
+- 0.1
+- 0.15
+- 0.55
+- 0.02
+- 0.2
+- 0.8
+- 0.5
+- 0.15
+- 0.05
+- 0.02
+- 0.01
+interface_spec:
+  skeleton: /Game/Characters/Knight/SK_Knight
+  sockets_referenced: '[hand_r_weapon]'
+  material_slots: '[]'
+domain_spec:
+  forward_cm: '320.0'
+  strike_window: 0.25..0.45
+  root_motion_delta: '[320.0, 0.0, 0.0]'
+  phases: '{windup: [0.0, 0.25], active_strike: [0.25, 0.45], recovery: [0.45, 0.9]}'
+  notifies: '[{name: AN_HitCheck, time: 0.38}]'
+  kinematics: '{peak_velocity: 736.0, is_airborne: false, dominant_limbs: [hand_r, spine_03]}'
+edges: []
+yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: AnimMontage:AM_Knight_DashThrust_01\n  asset_path: /Game/Characters/Knight/Anim/AM_Knight_DashThrust_01\n  asset_class: AnimMontage\n  parent_class: AnimMontage\n  taxonomy: [Asset, Animation, Montage, Combat]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: /Game/Characters/Knight/SK_Knight\n  sockets_referenced: [hand_r_weapon] # weapon / hitbox attach candidates\n  material_slots: []\n\ndomain_spec:\n  duration: 0.9 # unit: seconds\n  kinematics:\n    root_motion_delta: [320, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 320\n    peak_velocity: 736\n    is_airborne: false\n    dominant_limbs: [hand_r, spine_03] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0.25] # auto-split from kinetic peaks\n    active_strike: [0.25, 0.45] # auto-split from kinetic peaks\n    recovery: [0.45, 0.9] # auto-split from kinetic peaks\n  strike_window: 0.25..0.45\n  notifies:\n    - { name: AN_HitCheck, time: 0.38 }\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 0\n  top_referencers: []\n"
+---
+asset_path: /Game/Characters/Knight/Anim/AM_Knight_SpinSweep_04
+logical_id: AnimMontage:AM_Knight_SpinSweep_04
+asset_class: AnimMontage
+parent_class: AnimMontage
+taxonomy:
+- Asset
+- Animation
+- Montage
+- Combat
+tokens: am knight spinsweep 04 knight heavy slash combat sword
+content_hash: sha1:AM_Knight_SpinSweep_04
+duration: 1.35
+bounds_size:
+- 0.0
+- 0.0
+- 0.0
+skeleton_path: /Game/Characters/Knight/SK_Knight
+dominant_limb: hand_r
+fingerprint_vec:
+- 0.27
+- 1.0
+- 0.0
+- 0.0
+- 0.3
+- 0.3
+- 0.2
+- 0.2
+- 0.1
+- 0.2
+- 0.3
+- 0.4
+- 0.6
+- 0.5
+- 0.2
+- 0.05
+interface_spec:
+  skeleton: /Game/Characters/Knight/SK_Knight
+  sockets_referenced: '[hand_r_weapon]'
+  material_slots: '[]'
+domain_spec:
+  forward_cm: '60.0'
+  strike_window: 0.40..0.75
+  root_motion_delta: '[60.0, 0.0, 0.0]'
+  phases: '{windup: [0.0, 0.4], active_strike: [0.4, 0.75], recovery: [0.75, 1.35]}'
+  notifies: '[{name: AN_SpinTrail, time: 0.42}]'
+  kinematics: '{peak_velocity: 138.0, is_airborne: false, dominant_limbs: [hand_r, spine_03]}'
+edges: []
+yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: AnimMontage:AM_Knight_SpinSweep_04\n  asset_path: /Game/Characters/Knight/Anim/AM_Knight_SpinSweep_04\n  asset_class: AnimMontage\n  parent_class: AnimMontage\n  taxonomy: [Asset, Animation, Montage, Combat]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: /Game/Characters/Knight/SK_Knight\n  sockets_referenced: [hand_r_weapon] # weapon / hitbox attach candidates\n  material_slots: []\n\ndomain_spec:\n  duration: 1.35 # unit: seconds\n  kinematics:\n    root_motion_delta: [60, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 60\n    peak_velocity: 138\n    is_airborne: false\n    dominant_limbs: [hand_r, spine_03] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0.4] # auto-split from kinetic peaks\n    active_strike: [0.4, 0.75] # auto-split from kinetic peaks\n    recovery: [0.75, 1.35] # auto-split from kinetic peaks\n  strike_window: 0.40..0.75\n  notifies:\n    - { name: AN_SpinTrail, time: 0.42 }\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 0\n  top_referencers: []\n"
+---
+asset_path: /Game/Characters/Knight/SK_Knight
+logical_id: SkeletalMesh:SK_Knight
+asset_class: SkeletalMesh
+parent_class: SkeletalMesh
+taxonomy:
+- Asset
+- Mesh
+- Skeletal
+tokens: knight skeleton humanoid
+content_hash: sha1:/Game/Characters/Knight/SK_Knight
+duration: 0.0
+bounds_size:
+- 0.0
+- 0.0
+- 0.0
+skeleton_path: null
+dominant_limb: null
+fingerprint_vec:
+- 0.30942637387763805
+- 0.20628424925175867
+- 0.9282791216329142
+- 0.04873949579831933
+- 0.13781512605042018
+- 0.13781512605042018
+- 0.12436974789915967
+- 0.13781512605042018
+- 0.14453781512605043
+- 0.11764705882352941
+- 0.15126050420168066
+- 0.2772588722239781
+- 0.38918202981106265
+- 0.3
+- 1.0
+- 1.0
+interface_spec:
+  skeleton: /Game/Characters/Knight/SK_Knight
+  sockets_referenced: '[hand_r_weapon, hand_l_weapon]'
+  material_slots: '[M_Body, M_Armor, M_Weapon]'
+domain_spec:
+  hint: Humanoid|6sockets|SK_Knight
+edges: []
+yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: SkeletalMesh:SK_Knight\n  asset_path: /Game/Characters/Knight/SK_Knight\n  asset_class: SkeletalMesh\n  parent_class: SkeletalMesh\n  taxonomy: [Asset, Mesh, Skeletal]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: /Game/Characters/Knight/SK_Knight\n  sockets_referenced: [hand_r_weapon, hand_l_weapon] # weapon / hitbox attach candidates\n  material_slots: [M_Body, M_Armor, M_Weapon]\n\ndomain_spec:\n  duration: 0 # unit: seconds\n  kinematics:\n    root_motion_delta: [0, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 0\n    peak_velocity: 0\n    is_airborne: false\n    dominant_limbs: [None] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0] # auto-split from kinetic peaks\n    active_strike: [0, 0] # auto-split from kinetic peaks\n    recovery: [0, 0] # auto-split from kinetic peaks\n  strike_window: \n  notifies:\n    []\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 0\n  top_referencers: []\n"
+---
+asset_path: /Game/Materials/MI_Knight_Body
+logical_id: MaterialInstanceConstant:MI_Knight_Body
+asset_class: MaterialInstanceConstant
+parent_class: MaterialInterface
+taxonomy:
+- Asset
+- Material
+- Instance
+tokens: knight body material dissolve hitflash
+content_hash: sha1:/Game/Materials/MI_Knight_Body
+duration: 0.0
+bounds_size:
+- 0.0
+- 0.0
+- 0.0
+skeleton_path: null
+dominant_limb: null
+fingerprint_vec:
+- 0.0
+- 0.0
+- 0.0
+- 0.6
+- 0.2
+- 0.1
+- 0.05
+- 0.02
+- 0.01
+- 0.01
+- 0.01
+- 0.4394449154672439
+- 0.0
+- 0.8888888888888888
+- 0.0
+- 1.0
+interface_spec:
+  skeleton: ''
+domain_spec:
+  hint: Opaque|SupportsDissolve|SupportsHitFlash
+  forward_cm: '0'
+  exposed_params: DissolveAmount,HitFlashIntensity,Roughness
+edges: []
+yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: MaterialInstanceConstant:MI_Knight_Body\n  asset_path: /Game/Materials/MI_Knight_Body\n  asset_class: MaterialInstanceConstant\n  parent_class: MaterialInterface\n  taxonomy: [Asset, Material, Instance]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: \n  sockets_referenced: [] # weapon / hitbox attach candidates\n  material_slots: []\n\ndomain_spec:\n  duration: 0 # unit: seconds\n  kinematics:\n    root_motion_delta: [0, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 0\n    peak_velocity: 0\n    is_airborne: false\n    dominant_limbs: [None] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0] # auto-split from kinetic peaks\n    active_strike: [0, 0] # auto-split from kinetic peaks\n    recovery: [0, 0] # auto-split from kinetic peaks\n  strike_window: \n  notifies:\n    []\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 0\n  top_referencers: []\n"
+---
+asset_path: /Game/VFX/NS_Slash_Heavy
+logical_id: NiagaraSystem:NS_Slash_Heavy
+asset_class: NiagaraSystem
+parent_class: NiagaraSystem
+taxonomy:
+- Asset
+- VFX
+- Niagara
+tokens: slash heavy trail vfx
+content_hash: sha1:/Game/VFX/NS_Slash_Heavy
+duration: 0.0
+bounds_size:
+- 0.0
+- 0.0
+- 0.0
+skeleton_path: null
+dominant_limb: null
+fingerprint_vec:
+- 0.24
+- 0.0
+- 0.0
+- 0.0
+- 0.1
+- 0.1
+- 0.1
+- 0.7
+- 0.9
+- 0.1
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+interface_spec:
+  skeleton: ''
+domain_spec:
+  hint: Once|1.2s|User.SlashColor
+  forward_cm: '0'
+  exposed_params: SlashColor,SlashWidth,TrailLength
+edges: []
+yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: NiagaraSystem:NS_Slash_Heavy\n  asset_path: /Game/VFX/NS_Slash_Heavy\n  asset_class: NiagaraSystem\n  parent_class: NiagaraSystem\n  taxonomy: [Asset, VFX, Niagara]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: \n  sockets_referenced: [] # weapon / hitbox attach candidates\n  material_slots: []\n\ndomain_spec:\n  duration: 0 # unit: seconds\n  kinematics:\n    root_motion_delta: [0, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 0\n    peak_velocity: 0\n    is_airborne: false\n    dominant_limbs: [None] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0] # auto-split from kinetic peaks\n    active_strike: [0, 0] # auto-split from kinetic peaks\n    recovery: [0, 0] # auto-split from kinetic peaks\n  strike_window: \n  notifies:\n    []\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 0\n  top_referencers: []\n"
+---
+asset_path: /Game/Audio/SFX_Sword_Heavy
+logical_id: SoundWave:SFX_Sword_Heavy
+asset_class: SoundWave
+parent_class: SoundBase
+taxonomy:
+- Asset
+- Audio
+- Sound
+tokens: sword heavy slash sound
+content_hash: sha1:/Game/Audio/SFX_Sword_Heavy
+duration: 0.0
+bounds_size:
+- 0.0
+- 0.0
+- 0.0
+skeleton_path: null
+dominant_limb: null
+fingerprint_vec:
+- 0.16999999999999998
+- 0.0
+- 0.0
+- 0.0
+- 0.6
+- 0.2
+- 0.1
+- 0.1
+- 0.8
+- 0.15
+- 0.05
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+interface_spec:
+  skeleton: ''
+domain_spec:
+  hint: Mono|0.85s|3D_Combat
+  forward_cm: '0'
+edges: []
+yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: SoundWave:SFX_Sword_Heavy\n  asset_path: /Game/Audio/SFX_Sword_Heavy\n  asset_class: SoundWave\n  parent_class: SoundBase\n  taxonomy: [Asset, Audio, Sound]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: \n  sockets_referenced: [] # weapon / hitbox attach candidates\n  material_slots: []\n\ndomain_spec:\n  duration: 0 # unit: seconds\n  kinematics:\n    root_motion_delta: [0, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 0\n    peak_velocity: 0\n    is_airborne: false\n    dominant_limbs: [None] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0] # auto-split from kinetic peaks\n    active_strike: [0, 0] # auto-split from kinetic peaks\n    recovery: [0, 0] # auto-split from kinetic peaks\n  strike_window: \n  notifies:\n    []\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 0\n  top_referencers: []\n"
+---
+asset_path: /Game/Combat/Abilities/GA_Knight_Combo2
+logical_id: Blueprint:GA_Knight_Combo2
+asset_class: Blueprint
+parent_class: Blueprint
+taxonomy:
+- Asset
+- Gameplay
+- Ability
+tokens: knight combo2 ability gameplay
+content_hash: sha1:/Game/Combat/Abilities/GA_Knight_Combo2
+duration: 0.0
+bounds_size:
+- 0.0
+- 0.0
+- 0.0
+skeleton_path: null
+dominant_limb: null
+fingerprint_vec:
+- 0.4
+- 0.0
+- 0.0
+- 0.0
+- 0.4
+- 0.3
+- 0.2
+- 0.1
+- 0.2
+- 0.5
+- 0.8
+- 0.4
+- 0.1
+- 0.0
+- 0.0
+- 0.0
+interface_spec:
+  skeleton: ''
+domain_spec:
+  hint: Ability|Combo2
+  forward_cm: '0'
+edges:
+- target_path: /Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02
+  edge_type: DEPENDS_ON
+  weight: 1.0
+- target_path: /Game/Characters/Knight/SK_Knight
+  edge_type: DEPENDS_ON
+  weight: 1.0
+yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: Blueprint:GA_Knight_Combo2\n  asset_path: /Game/Combat/Abilities/GA_Knight_Combo2\n  asset_class: Blueprint\n  parent_class: Blueprint\n  taxonomy: [Asset, Gameplay, Ability]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: \n  sockets_referenced: [] # weapon / hitbox attach candidates\n  material_slots: []\n\ndomain_spec:\n  duration: 0 # unit: seconds\n  kinematics:\n    root_motion_delta: [0, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 0\n    peak_velocity: 0\n    is_airborne: false\n    dominant_limbs: [None] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0] # auto-split from kinetic peaks\n    active_strike: [0, 0] # auto-split from kinetic peaks\n    recovery: [0, 0] # auto-split from kinetic peaks\n  strike_window: \n  notifies:\n    []\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 0\n  top_referencers: []\n"

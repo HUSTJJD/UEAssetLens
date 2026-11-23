@@ -6,12 +6,12 @@ Field names are the contract in Server/schema/PROTOCOL.md.
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 import duckdb
+import yaml
 
 from .taxonomy import build_taxonomy
 
@@ -93,12 +93,26 @@ def _as_float(value: Any, default: float = 0.0) -> float:
 
 
 def _as_str_map(value: Any) -> dict[str, str]:
+    """Normalize a MAP(VARCHAR,VARCHAR) payload so every value is a string.
+
+    YAML staging may carry native sequences/mappings; serialize those to compact
+    YAML flow-text fragments (the convention documented in PROTOCOL.md §1).
+    Scalars stay as text; nothing is serialized to a foreign format.
+    """
     if not isinstance(value, dict):
         return {}
-    return {
-        str(k): (v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, separators=(",", ":")))
-        for k, v in value.items()
-    }
+    result: dict[str, str] = {}
+    for k, v in value.items():
+        if isinstance(v, str):
+            result[str(k)] = v
+        elif isinstance(v, (list, tuple, dict)):
+            result[str(k)] = yaml.safe_dump(
+                list(v) if isinstance(v, tuple) else v,
+                sort_keys=False, allow_unicode=True, default_flow_style=True,
+            ).strip()
+        else:
+            result[str(k)] = "" if v is None else str(v)
+    return result
 
 
 def normalize_record(raw: dict[str, Any]) -> dict[str, Any]:
@@ -147,17 +161,22 @@ def normalize_record(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
-    records = []
+def load_yaml_docs(path: str | Path) -> list[dict[str, Any]]:
+    """Load a YAML document stream (.ual/staging/*.yaml, seed.yaml).
+
+    A single malformed/indented document aborts the whole stream: YAML is
+    indentation-sensitive, so callers must treat a batch as all-or-nothing.
+    """
     with open(path, "r", encoding="utf-8") as handle:
-        for line_no, line in enumerate(handle, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"{path}:{line_no}: invalid JSONL: {exc}") from exc
+        try:
+            docs = [d for d in yaml.safe_load_all(handle) if d is not None]
+        except yaml.YAMLError as exc:
+            raise ValueError(f"{path}: invalid YAML document stream: {exc}") from exc
+    records = []
+    for i, doc in enumerate(docs, 1):
+        if not isinstance(doc, dict):
+            raise ValueError(f"{path}: document {i}: expected a YAML mapping, got {type(doc).__name__}")
+        records.append(doc)
     return records
 
 
@@ -206,7 +225,7 @@ def ingest_records(
             continue
         # Any UObject asset class must land with a usable three-level taxonomy,
         # even when an upstream sink omitted it. The rule table is shared with
-        # the C++ extractor (Server/ual_common/taxonomy.json).
+        # the C++ extractor (Server/ual_common/taxonomy.yaml).
         if not rec["taxonomy"] and rec["asset_class"]:
             rec["taxonomy"] = build_taxonomy(rec["asset_class"])
         # logical_id is UNIQUE in init.sql; de-duplicate deterministically so a
@@ -215,7 +234,7 @@ def ingest_records(
             con, rec["asset_path"], rec["logical_id"]
         )
         # DuckDB binds Python lists natively to VARCHAR[] / FLOAT[N]; do NOT
-        # json.dumps() them, CAST(? AS ...) handles the conversion.
+        # serialize them to text (e.g. yaml.safe_dump()), CAST(? AS ...) does it.
         params = [rec[c] for c in ASSET_COLUMNS]
         con.execute(upsert, params)
         assets += 1

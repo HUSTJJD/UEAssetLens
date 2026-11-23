@@ -80,7 +80,7 @@ def self_test() -> int:
     tmp = Path(tempfile.gettempdir()) / "ual_self_test.duckdb"
     tmp.unlink(missing_ok=True)
     con = db.open_write(tmp)
-    stats = db.ingest_records(con, db.load_jsonl(SERVER_ROOT / "tests" / "seed.jsonl"))
+    stats = db.ingest_records(con, db.load_yaml_docs(SERVER_ROOT / "tests" / "seed.yaml"))
     con.close()
     con = db.open_readonly(tmp)
     checks = [

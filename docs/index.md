@@ -50,9 +50,9 @@ python -m pip install -r requirements.txt
 # 无 UE SDK 时：用随仓种子数据建库
 python Server/ual_cli/ual_cli.py build --demo
 
-# 有 UE SDK 时：Commandlet 产出 JSONL 后灌库
+# 有 UE SDK 时：Commandlet 产出 YAML 文档流后灌库
 python Server/ual_cli/ual_cli.py build --project D:/learning/AnnBuildTools/Ann \
-  --from-jsonl .ual/staging/ual.jsonl --incremental
+  --from-yaml .ual/staging/ual.yaml --incremental
 
 # 自检
 python -m pytest Server/tests -q
@@ -130,7 +130,7 @@ python -m mkdocs build --strict --site-dir _site
 | `reference/cli.md` | `ual_cli.py` argparse |
 | `reference/protocol.md` | `Server/schema/PROTOCOL.md` |
 | `agent-guide.md` | `CLAUDE.md` |
-| `Server/ual_mcp/tool_schemas.json` | `TOOL_DEFS`（供 C++ 引擎内 MCP 工具读取） |
+| `Server/ual_mcp/tool_schemas.yaml` | `TOOL_DEFS`（供 C++ 引擎内 MCP 工具读取） |
 
 ## 引擎内官方 MCP（UE6）
 

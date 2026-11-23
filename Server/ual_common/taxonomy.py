@@ -1,6 +1,6 @@
 """Data-driven asset taxonomy for UEAssetLens.
 
-The rule table lives in ``taxonomy.json`` next to this module and is the single
+The rule table lives in ``taxonomy.yaml`` next to this module and is the single
 source of truth shared with the C++ extractor: ``Tools/gen_taxonomy.py`` renders
 it into ``Source/UEAssetLensEditor/Public/UALTaxonomyRules.h``.
 
@@ -9,24 +9,24 @@ configured ``fallback`` family instead of being rejected. Matching is
 case-sensitive, mirroring ``FString::Contains(..., ESearchCase::CaseSensitive)``
 on the C++ side, so both implementations produce identical taxonomy arrays.
 
-Standard library only -- this module is imported by the CLI and the test suite,
-neither of which should require optional runtime dependencies.
+Reads the rule table via PyYAML (``yaml.safe_load``); PyYAML is a declared
+runtime dependency in requirements.txt, not an optional extra.
 """
 from __future__ import annotations
 
-import json
+import yaml
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-RULES_PATH = Path(__file__).with_name("taxonomy.json")
+RULES_PATH = Path(__file__).with_name("taxonomy.yaml")
 
 
 @lru_cache(maxsize=1)
 def rules() -> dict[str, Any]:
     """Load and validate the rule table once."""
     with RULES_PATH.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
+        data = yaml.safe_load(handle)
     if not isinstance(data.get("families"), list) or not data["families"]:
         raise ValueError(f"{RULES_PATH}: 'families' must be a non-empty list")
     for entry in data["families"]:

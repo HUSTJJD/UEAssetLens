@@ -144,8 +144,8 @@ void FUniversalReflectionExtractor::TokenizeName(const FString& InName, TArray<F
 
 void FUniversalReflectionExtractor::BuildTaxonomy(const FString& AssetClass, TArray<FString>& OutTaxonomy)
 {
-	// 规则表由 Tools/gen_taxonomy.py 从 Server/ual_common/taxonomy.json 生成，
-	// 与 Python 侧共用同一份数据；新增 UE 资产类型族只需改 JSON 后重新生成。
+	// 规则表由 Tools/gen_taxonomy.py 从 Server/ual_common/taxonomy.yaml 生成，
+	// 与 Python 侧共用同一份数据；新增 UE 资产类型族只需改 YAML 后重新生成。
 	// 大小写敏感匹配，保证 C++ 与 Python 的分类结果完全一致。
 	using namespace UALTaxonomyRules;
 
