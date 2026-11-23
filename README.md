@@ -5,6 +5,8 @@
 
 > 零多模态大模型依赖的 Unreal Engine 确定性资产语义索引、防重复检测与 AI Agent（MCP）检索中枢。
 
+**MCP 定位**：UEAssetLens 是 Epic 官方 MCP 的**统一资产工具层与编辑事务层**——用确定性语义索引回答「该改哪个资产」，把实际写操作交给官方 Toolset，并用事务层保证「改完可验证、可回滚、索引仍一致」。工具按 `AIAccessMode` 统一分为 Query / Edit / Execute 三类：UAL 的 4 个检索工具属于 Query 类，与官方 Read 工具同层；官方已有的通用写操作不重复实现，缺口部分（语义查重、批量召回、计划 / 审批 / 回滚）由 UAL 自建补齐。详见 [MCP 定位与事务层规格](docs/mcp-positioning.md)。
+
 **文档站**：<https://hustjjd.github.io/UEAssetLens/>（由 GitHub Actions 自动构建发布）
 
 二进制资产黑盒 → 确定性数学/拓扑提取 → **DuckDB + YAML + TOON** 三层数据流转 → 双向服务于人类美术防重入库与 AI Agent 零幻觉装配。
@@ -81,10 +83,10 @@ UnrealEditor-Cmd.exe Ann.uproject -run=UALIndexBuilder -Roots=/Game,/UEAbilityKi
 
 | 工具 | 输入 | 输出 |
 |---|---|---|
-| `ual_search_assets` | `query`, `asset_class`, `filters`, `domain_scope`, `limit` | TOON：`candidates` + `co_occurring_bundle` |
-| `ual_inspect_asset` | `logical_id` 或 `asset_path` | YAML：完整资产契约 |
-| `ual_get_cooccurring_bundle` | `asset_path`, `top_k` | TOON：配套资产包 |
-| `ual_find_similar_assets` | `asset_path`, `threshold` | TOON：余弦相似度 ≥ 阈值的已有资产 |
+| `UEAssetLens.AssetSemanticToolset.SearchAssets` | `query`, `asset_class`, `filters`, `domain_scope`, `limit` | TOON：`candidates` + `co_occurring_bundle` |
+| `UEAssetLens.AssetSemanticToolset.InspectAsset` | `logical_id` 或 `asset_path` | YAML：完整资产契约 |
+| `UEAssetLens.AssetSemanticToolset.GetCooccurringBundle` | `asset_path`, `top_k` | TOON：配套资产包 |
+| `UEAssetLens.AssetSemanticToolset.FindSimilarAssets` | `asset_path`, `threshold` | TOON：余弦相似度 ≥ 阈值的已有资产 |
 
 `filters` 支持的硬约束：`skeleton`、`duration_min`、`duration_max`、`min_forward_cm`、`max_forward_cm`、`dominant_limb`、`asset_class`。
 
@@ -114,7 +116,7 @@ MCP client → Epic Unreal MCP (HTTP) → FUALEngineMcpTool::RunAsync (线程池
 1. 在工程中启用 `ModelContextProtocol` 插件（`UEAssetLens.uplugin` 已声明为 `Optional` 依赖），并确认 `AllToolsets` 按需启用。
 2. 先建索引：`python Server/ual_cli/ual_cli.py build --project <root>`。
 3. 启动编辑器；`UEAssetLensMCP` 在 `PostEngineInit` 自动 `AddTool`。控制台执行 `ModelContextProtocol.RefreshTools` 可热重载。
-4. 客户端连接 `http://127.0.0.1:8000/mcp`；`tools/list` 应出现 `ual_search_assets` 等 4 个工具。
+4. 客户端连接 `http://127.0.0.1:8000/mcp`；`tools/list` 应出现 `UEAssetLens.AssetSemanticToolset.SearchAssets` 等 4 个工具。
 
 配置（`DefaultEditorPerProject.ini`，路径为空时用默认值）：
 

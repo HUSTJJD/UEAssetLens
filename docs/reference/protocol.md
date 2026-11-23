@@ -11,8 +11,8 @@
 | 层 | 格式 | 消费者 | 禁止事项 |
 |---|---|---|---|
 | L1 存储 | DuckDB `.ual/index.duckdb` | `ual-cli`、`ual_mcp` | 禁止把整库 JSON 导出给 LLM |
-| L2 精读 | YAML `*.spec.yaml` | `ual_inspect_asset`、Git Diff、Code Review | 禁止用于批量候选列表 |
-| L3 批量 | TOON | `ual_search_assets` 等 3 个批量工具 | 禁止逐条输出完整 YAML |
+| L2 精读 | YAML `*.spec.yaml` | `UEAssetLens.AssetSemanticToolset.InspectAsset`、Git Diff、Code Review | 禁止用于批量候选列表 |
+| L3 批量 | TOON | `UEAssetLens.AssetSemanticToolset.SearchAssets` 等 3 个批量工具 | 禁止逐条输出完整 YAML |
 
 ## 1. L1：DuckDB
 
@@ -72,7 +72,7 @@ UE 侧 `UALYamlIndexSink` 写入 `.ual/staging/*.yaml`，`---` 分隔的多文�
 
 ## 2. L2：YAML 单资产规格
 
-`ual_inspect_asset` 直接返回 `assets.yaml_cache`。生成器必须：
+`UEAssetLens.AssetSemanticToolset.InspectAsset` 直接返回 `assets.yaml_cache`。生成器必须：
 
 1. 使用 `identity` / `interface_contract` / `domain_spec` / `graph_context` 四个顶层键。
 2. 每个非显然字段附 `#` 语义注释（单位、推断依据、建议对齐对象）。
@@ -104,10 +104,10 @@ TOON = Token-Oriented Object Notation。**头部一次性声明字段 Schema，�
 
 | 工具 | section | 字段 |
 |---|---|---|
-| `ual_search_assets` | `candidates` | `logical_id,duration,forward_cm,strike_window,limb,score` |
-| `ual_search_assets` | `co_occurring_bundle` | `logical_id,asset_class,weight,hint` |
-| `ual_get_cooccurring_bundle` | `co_occurring_bundle` | 同上 |
-| `ual_find_similar_assets` | `similar_assets` | `logical_id,asset_class,similarity,shared_class` |
+| `UEAssetLens.AssetSemanticToolset.SearchAssets` | `candidates` | `logical_id,duration,forward_cm,strike_window,limb,score` |
+| `UEAssetLens.AssetSemanticToolset.SearchAssets` | `co_occurring_bundle` | `logical_id,asset_class,weight,hint` |
+| `UEAssetLens.AssetSemanticToolset.GetCooccurringBundle` | `co_occurring_bundle` | 同上 |
+| `UEAssetLens.AssetSemanticToolset.FindSimilarAssets` | `similar_assets` | `logical_id,asset_class,similarity,shared_class` |
 
 所有 TOON 输出首行固定为 `# UEAssetLens TOON v1 (Zero-VLM)`，便于 Agent 端识别格式。
 

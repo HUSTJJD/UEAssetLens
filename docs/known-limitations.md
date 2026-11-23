@@ -53,7 +53,7 @@ DuckDB FTS 不随 `INSERT` 自动更新。`ual-cli build` 每次灌库后调用 
 
 ## 8. 指纹假阳性
 
-实测种子库：`AM_Knight_HeavySlash_02` 与 `AM_Knight_HeavySlash_03` 相似度 0.9999（真重复），但 `AM_Knight_HeavySlash_02` 与 `AM_Knight_SpinSweep_04` 也达 0.914（假阳性）。原因是所有 RootMotion 均沿 +X，方向余弦 3 维完全相同，叠加时长维度接近。默认阈值 0.85 是**召回取向**，命中后必须 `ual_inspect_asset` 精读 YAML 或人工确认。改进方向见 [架构说明](architecture.md) §3。
+实测种子库：`AM_Knight_HeavySlash_02` 与 `AM_Knight_HeavySlash_03` 相似度 0.9999（真重复），但 `AM_Knight_HeavySlash_02` 与 `AM_Knight_SpinSweep_04` 也达 0.914（假阳性）。原因是所有 RootMotion 均沿 +X，方向余弦 3 维完全相同，叠加时长维度接近。默认阈值 0.85 是**召回取向**，命中后必须 `UEAssetLens.AssetSemanticToolset.InspectAsset` 精读 YAML 或人工确认。改进方向见 [架构说明](architecture.md) §3。
 
 ## 9. `verify-references` 是静态启发式
 

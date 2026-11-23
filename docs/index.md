@@ -106,10 +106,10 @@ pwsh -File Tools/setup_mcp.ps1
 
 | 工具 | 作用 | 入参 | 返回 |
 | --- | --- | --- | --- |
-| `ual_search_assets` | FTS BM25 + 硬约束漏斗混合召回 | `query`, `asset_class`, `filters`, `domain_scope`, `limit=8` | TOON `candidates` + `co_occurring_bundle` |
-| `ual_inspect_asset` | 单资产深度契约精读 | `key`（`logical_id` 或 `asset_path`） | YAML |
-| `ual_get_cooccurring_bundle` | 共现图谱配套资产推荐 | `asset_path`, `top_k=5` | TOON `co_occurring_bundle` |
-| `ual_find_similar_assets` | 16 维指纹余弦查重 | `asset_path`, `threshold=0.85` | TOON `similar_assets` |
+| `UEAssetLens.AssetSemanticToolset.SearchAssets` | FTS BM25 + 硬约束漏斗混合召回 | `query`, `asset_class`, `filters`, `domain_scope`, `limit=8` | TOON `candidates` + `co_occurring_bundle` |
+| `UEAssetLens.AssetSemanticToolset.InspectAsset` | 单资产深度契约精读 | `key`（`logical_id` 或 `asset_path`） | YAML |
+| `UEAssetLens.AssetSemanticToolset.GetCooccurringBundle` | 共现图谱配套资产推荐 | `asset_path`, `top_k=5` | TOON `co_occurring_bundle` |
+| `UEAssetLens.AssetSemanticToolset.FindSimilarAssets` | 16 维指纹余弦查重 | `asset_path`, `threshold=0.85` | TOON `similar_assets` |
 
 `filters` 支持 `skeleton`、`duration_min/max`、`min/max_forward_cm`、`dominant_limb`。
 

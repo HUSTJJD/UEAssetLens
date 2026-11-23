@@ -84,13 +84,17 @@ python -m mkdocs build --strict --site-dir _site
 ## 4.2 引擎内官方 MCP 约定
 
 - `Source/UEAssetLensMCP/` 只在 UE6 且启用 Epic `ModelContextProtocol` 插件时生效。模块在 `PostEngineInit` 检查模块是否已加载，未启用则只打一条 Warning，不影响 `ual-cli` 与独立 Python MCP。
-- **禁止改用 `UToolsetDefinition`**：ToolsetRegistry 会把工具名限定成 `<Toolset>.<Tool>`，破坏与 Python 侧共享的 1:1 契约。用 `IModelContextProtocolModule::AddTool`。
-- `Server/ual_mcp/tool_schemas.yaml` 是工具名 / 描述 / `inputSchema` 的唯一事实源（内容仍是等价的 JSON Schema 对象），由 `Tools/gen_docs.py` 从 `tools.py` 的 `TOOL_DEFS` 生成，**禁止手工编辑**。改工具签名必须同步 `TOOL_DEFS`、`server.py` 的 `@sdk.tool()` 签名与生成器输出；`gen_docs.py --check` 会比对两者并拦截漂移。
+- **工具命名必须对齐官方限定名（P0）**：官方对外名为 `{ModuleName}.{ClassName}.{FunctionName}`（`FakeToolset.cpp:49` 拼名、MCP 适配器 `ModelContextProtocolToolsetRegistryAdapter.cpp:588` 注册），源码层 UFUNCTION 为 PascalCase（878 个中 877 个）。`ValidateToolName()` 接受 snake_case 只代表**合法**、不代表**规范**。**禁止新增 `ual_*` 裸名工具**：对外名由 `TOOL_DEFS.mcp_name` 唯一决定，`server.py` 用 `@sdk.tool(name=...)` 显式指定（已核实 MCP SDK 2.x 支持），C++ `AddTool` 直接用该限定名注册；Python 内部实现函数名保留 snake_case，与对外名解耦。目标命名表与硬切迁移清单见 `docs/mcp-positioning.md` §2.1，**不保留旧名别名**。
+- **概念按能力分类，实现分两阶段**：UAL 工具（含现有 4 个语义检索工具，限定名见 `docs/mcp-positioning.md` §2.1）与官方工具同属统一工具层，按 `AIAccessMode` 分 `Read`(Query) / `Write`(Edit) / `Execute`(事务)，**不按实现归属分层**。阶段 1 继续用 `IModelContextProtocolModule::AddTool`：ToolsetRegistry 会把工具名限定成 `<Toolset>.<Tool>`（`FakeToolset.cpp:49` 实证），贸然改用 `UToolsetDefinition` 会破坏与 Python 侧共享的 1:1 契约。阶段 2 若要迁移，必须一次性同步 `TOOL_DEFS`、`server.py`、`tool_schemas.yaml`、`docs/reference/*.md` 与所有客户端调用，**不得引入双轨别名**。详见 `docs/mcp-positioning.md`。
+- **禁止重复实现官方已有工具**（`FindAssets` / `CreateMaterial` / `Duplicate` / `SaveAsset` / `SetActorTransform` 等 111 个资产域工具）；新增工具前先查父工程 `Docs/ai-capabilities/toolset-inventory.yaml`。语义检索、指纹查重、共现装配、TOON 批量召回与事务编排属 UAL 自建范围（官方 878 工具中语义查重与 dry-run / 回滚能力命中为 0）。
+- `Server/ual_mcp/tools.py::TOOL_DEFS` 是工具契约唯一事实源（含 `mcp_name` 对外限定名、描述、`inputSchema`）；`Server/ual_mcp/tool_schemas.yaml`（内容仍是等价的 JSON Schema 对象）与 `docs/reference/mcp-tools.md` 由 `Tools/gen_docs.py` 生成，**禁止手工编辑**。改工具名 / 签名必须同步 `TOOL_DEFS`、`server.py` 的 `@sdk.tool(name=...)` 与生成器输出；`gen_docs.py --check` 会比对并拦截漂移。
 - Python MCP Server **只支持官方 MCP SDK 2.x**（`mcp>=2,<3`，v2 中 `FastMCP` 已更名 `MCPServer`）。禁止重新引入手写 JSON-RPC 协议层；SDK 缺失或不兼容时明确报错退出，不静默降级。
 - C++ 侧不引入 DuckDB C API；工具调用委托给 `engine_bridge.py` 子进程，通过 UTF-8 请求/响应文件传参（不要用 stdout，Windows 上会破坏中文注释编码）。
-- 4 个工具全部只读，`GetAnnotations()` 必须返回 `accessMode=read` / `readOnlyHint=true`。新增写操作前必须重新评估。
+- 现有 4 个检索工具只读，`GetAnnotations()` 必须返回 `accessMode=read` / `readOnlyHint=true`。**允许新增 `Write` 类工具，但必须经事务层**（`UEAssetLens.AssetEditTransactionToolset.PlanEdit` → 审批 → `UEAssetLens.AssetEditTransactionToolset.ApplyPlan` → `UEAssetLens.AssetEditTransactionToolset.VerifyEdit`），禁止把裸写工具直接暴露给客户端；每个 operation 的 `tool` 必须命中官方工具白名单，`plan_id` 必须确定性（禁止随机 ID / 时间戳 / 本地路径）。新增工具一律显式标注 `AIAccessMode`——未标注按 `Execute` 处理，CI 需拦截。
+- 开放编辑后必须保证索引一致：事务 `commit` 阶段触发 `UALIndexBuilder` 增量重扫，或补 AssetRegistry 事件监听；**MCP 工具侧仍保持 DuckDB `read_only=True`**，写索引只由 Commandlet / 事件监听侧完成。
 - 耗时调用走 `RunAsync` + 线程池，**禁止在 game thread 上同步等 Python 进程**。
 - 每次调用启动一个 Python 进程是已知成本，不要偷偷改成常驻进程而不更新 `docs/known-limitations.md`。
+- 官方 MCP / Toolset 为 `Experimental + NoRedist`，只能开发期启用，**不可随发布包分发**；能力分级与降级行为见 `docs/mcp-positioning.md` 第 7 节。客户端统一走 `http://localhost:8000/mcp`（HTTP），Python stdio server 仅作降级路径保留、不删。
 - 官方 server 是 HTTP loopback 且无认证，禁止把它暴露到非 loopback 地址。
 
 UE 侧另需 `UnrealEditor-Cmd.exe` 编译并运行 `UEAssetLensTests` 自动化用例；本仓库 CI 不假定存在 UE SDK。

@@ -37,7 +37,7 @@ def dispatch(con: Any, name: str, arguments: dict[str, Any]) -> str:
     if name not in TOOL_NAMES:
         raise KeyError(f"unknown UAL tool: {name!r}; expected one of {TOOL_NAMES}")
     args = arguments or {}
-    if name == "ual_search_assets":
+    if name == "UEAssetLens.AssetSemanticToolset.SearchAssets":
         return tools.ual_search_assets(
             con,
             query=args.get("query"),
@@ -46,11 +46,11 @@ def dispatch(con: Any, name: str, arguments: dict[str, Any]) -> str:
             domain_scope=args.get("domain_scope"),
             limit=args.get("limit", 8),
         )
-    if name == "ual_inspect_asset":
+    if name == "UEAssetLens.AssetSemanticToolset.InspectAsset":
         return tools.ual_inspect_asset(con, args.get("key") or args.get("asset_path") or "")
-    if name == "ual_get_cooccurring_bundle":
+    if name == "UEAssetLens.AssetSemanticToolset.GetCooccurringBundle":
         return tools.ual_get_cooccurring_bundle(con, args["asset_path"], args.get("top_k", 5))
-    if name == "ual_find_similar_assets":
+    if name == "UEAssetLens.AssetSemanticToolset.FindSimilarAssets":
         return tools.ual_find_similar_assets(con, args["asset_path"], args.get("threshold", 0.85))
     raise AssertionError("unreachable")
 
@@ -86,10 +86,10 @@ def self_test() -> int:
 
     hero = "/Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02"
     cases = [
-        ("ual_search_assets", {"query": "heavy slash", "asset_class": "AnimMontage", "limit": 3}),
-        ("ual_inspect_asset", {"key": "AnimMontage:AM_Knight_HeavySlash_02"}),
-        ("ual_get_cooccurring_bundle", {"asset_path": hero, "top_k": 3}),
-        ("ual_find_similar_assets", {"asset_path": hero, "threshold": 0.95}),
+        ("UEAssetLens.AssetSemanticToolset.SearchAssets", {"query": "heavy slash", "asset_class": "AnimMontage", "limit": 3}),
+        ("UEAssetLens.AssetSemanticToolset.InspectAsset", {"key": "AnimMontage:AM_Knight_HeavySlash_02"}),
+        ("UEAssetLens.AssetSemanticToolset.GetCooccurringBundle", {"asset_path": hero, "top_k": 3}),
+        ("UEAssetLens.AssetSemanticToolset.FindSimilarAssets", {"asset_path": hero, "threshold": 0.95}),
     ]
     ok = True
     ro = db.open_readonly(index)

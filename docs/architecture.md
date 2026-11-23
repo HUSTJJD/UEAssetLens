@@ -108,7 +108,7 @@ CREATE TABLE asset_edges (
 **抗旋转的边界**：径向直方图对刚体旋转与等比缩放不敏感，但**抗旋转 ≠ 形状唯一标识**。两个外观不同、统计分布接近的资产会有高相似度。实测种子数据里 `AM_Knight_HeavySlash_02` 与 `AM_Knight_SpinSweep_04` 的余弦达 **0.914**，原因是两者 RootMotion 方向同为 `[1,0,0]`、时长维度接近——这是方向余弦设计的真实误报，不是 bug。因此：
 
 - 指纹只用于**候选粗排**，默认阈值 0.85 是召回取向，不是高置信判定；
-- 阈值以上的候选必须用 `ual_inspect_asset` 精读 YAML 或人工确认；
+- 阈值以上的候选必须用 `UEAssetLens.AssetSemanticToolset.InspectAsset` 精读 YAML 或人工确认；
 - 不能当几何哈希、不能当资产唯一 ID（唯一 ID 始终是 `asset_path`）。
 
 改进方向：把方向余弦拆成符号 + 幅度两维、增加动能峰值位置编码，或引入按 `asset_class` 分组后再比对的二级漏斗。

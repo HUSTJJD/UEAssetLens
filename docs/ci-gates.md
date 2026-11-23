@@ -115,7 +115,7 @@ repos:
 
 处理流程：
 
-1. 对 `lint-duplicates` 给出的每一对用 `ual_inspect_asset` 精读 YAML，判断真冗余还是合法变体；
+1. 对 `lint-duplicates` 给出的每一对用 `UEAssetLens.AssetSemanticToolset.InspectAsset` 精读 YAML，判断真冗余还是合法变体；
 2. 真冗余 → 合并/删除资产、修正引用、重跑门禁；
 3. 确属误报 → 记录白名单，注明理由、责任人、复查日期，并经过 code review；
 4. 禁止用白名单掩盖真实重复。

@@ -49,6 +49,7 @@ nav:
   - 首页: index.md
   - 架构与治理:
       - 架构说明: architecture.md
+      - MCP 定位与事务层规格: mcp-positioning.md
       - CI 门禁: ci-gates.md
       - 已知限制: known-limitations.md
   - 参考（自动生成）:

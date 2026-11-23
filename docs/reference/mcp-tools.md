@@ -5,7 +5,7 @@
 
 共 **4** 个工具。批量工具返回 TOON，单资产工具返回 YAML。
 
-## `ual_search_assets`
+## `UEAssetLens.AssetSemanticToolset.SearchAssets`
 
 Multi-funnel hybrid asset retrieval; returns compact TOON candidates + co-occurring bundle.
 
@@ -21,7 +21,7 @@ Multi-funnel hybrid asset retrieval; returns compact TOON candidates + co-occurr
 
 **实现**：`Server/ual_mcp/tools.py`
 
-## `ual_inspect_asset`
+## `UEAssetLens.AssetSemanticToolset.InspectAsset`
 
 Deep single-asset contract with semantic annotations; returns YAML.
 
@@ -33,7 +33,7 @@ Deep single-asset contract with semantic annotations; returns YAML.
 
 **实现**：`Server/ual_common/yamlspec.py`
 
-## `ual_get_cooccurring_bundle`
+## `UEAssetLens.AssetSemanticToolset.GetCooccurringBundle`
 
 Co-occurrence graph bundle recommendation; returns TOON.
 
@@ -46,7 +46,7 @@ Co-occurrence graph bundle recommendation; returns TOON.
 
 **实现**：`Server/ual_mcp/tools.py`
 
-## `ual_find_similar_assets`
+## `UEAssetLens.AssetSemanticToolset.FindSimilarAssets`
 
 Deterministic 16-dim fingerprint duplicate detection; returns TOON.
 

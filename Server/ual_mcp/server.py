@@ -43,7 +43,7 @@ def _create_sdk_server():
 
 
 def _register(sdk: Any, con: duckdb.DuckDBPyConnection) -> None:
-    @sdk.tool()
+    @sdk.tool(name="UEAssetLens.AssetSemanticToolset.SearchAssets")
     def ual_search_assets(
         query: Optional[str] = None,
         asset_class: Optional[str] = None,
@@ -54,17 +54,17 @@ def _register(sdk: Any, con: duckdb.DuckDBPyConnection) -> None:
         """Hybrid retrieval (FTS BM25 + hard filters); returns TOON candidates and bundle."""
         return tools.ual_search_assets(con, query, asset_class, filters, domain_scope, limit)
 
-    @sdk.tool()
+    @sdk.tool(name="UEAssetLens.AssetSemanticToolset.InspectAsset")
     def ual_inspect_asset(key: str) -> str:
         """Deep single-asset contract; returns annotated YAML."""
         return tools.ual_inspect_asset(con, key)
 
-    @sdk.tool()
+    @sdk.tool(name="UEAssetLens.AssetSemanticToolset.GetCooccurringBundle")
     def ual_get_cooccurring_bundle(asset_path: str, top_k: int = 5) -> str:
         """Co-occurrence graph bundle recommendation; returns TOON."""
         return tools.ual_get_cooccurring_bundle(con, asset_path, top_k)
 
-    @sdk.tool()
+    @sdk.tool(name="UEAssetLens.AssetSemanticToolset.FindSimilarAssets")
     def ual_find_similar_assets(asset_path: str, threshold: float = 0.85) -> str:
         """16-dim fingerprint duplicate detection; returns TOON."""
         return tools.ual_find_similar_assets(con, asset_path, threshold)
@@ -84,12 +84,12 @@ def self_test() -> int:
     con.close()
     con = db.open_readonly(tmp)
     checks = [
-        ("ual_search_assets", tools.ual_search_assets(
+        ("UEAssetLens.AssetSemanticToolset.SearchAssets", tools.ual_search_assets(
             con, query="heavy slash", asset_class="AnimMontage",
             filters={"min_forward_cm": 100.0, "duration_max": 1.5}, limit=8)),
-        ("ual_inspect_asset", tools.ual_inspect_asset(con, "AnimMontage:AM_Knight_HeavySlash_02")),
-        ("ual_get_cooccurring_bundle", tools.ual_get_cooccurring_bundle(con, HERO, 5)),
-        ("ual_find_similar_assets", tools.ual_find_similar_assets(con, HERO, 0.85)),
+        ("UEAssetLens.AssetSemanticToolset.InspectAsset", tools.ual_inspect_asset(con, "AnimMontage:AM_Knight_HeavySlash_02")),
+        ("UEAssetLens.AssetSemanticToolset.GetCooccurringBundle", tools.ual_get_cooccurring_bundle(con, HERO, 5)),
+        ("UEAssetLens.AssetSemanticToolset.FindSimilarAssets", tools.ual_find_similar_assets(con, HERO, 0.85)),
     ]
     print(f"[ual] seeded {stats['assets']} assets / {stats['edges']} edges")
     for name, output in checks:

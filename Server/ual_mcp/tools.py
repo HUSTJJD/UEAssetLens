@@ -16,13 +16,15 @@ CANDIDATE_FIELDS = ["logical_id", "duration", "forward_cm", "strike_window", "li
 BUNDLE_FIELDS = ["logical_id", "asset_class", "weight", "hint"]
 SIMILAR_FIELDS = ["logical_id", "asset_class", "similarity", "shared_class"]
 
-# The single source of truth for tool names, descriptions and input schemas.
+# The single source of truth: `name` is the Python implementation name,
+# `mcp_name` is the externally visible MCP tool name (official qualified form).
 # Tools/gen_docs.py parses this literal via AST (no import of this module) to
 # emit tool_schemas.yaml for the C++ in-editor MCP frontend and the generated
-# reference docs. Keep it in sync with the @sdk.tool() signatures in server.py.
+# reference docs. `mcp_name` must match @sdk.tool(name=...) in server.py.
 TOOL_DEFS: list[dict[str, Any]] = [
     {
         "name": "ual_search_assets",
+        "mcp_name": "UEAssetLens.AssetSemanticToolset.SearchAssets",
         "description": "Multi-funnel hybrid asset retrieval; returns compact TOON candidates + co-occurring bundle.",
         "inputSchema": {
             "type": "object",
@@ -37,6 +39,7 @@ TOOL_DEFS: list[dict[str, Any]] = [
     },
     {
         "name": "ual_inspect_asset",
+        "mcp_name": "UEAssetLens.AssetSemanticToolset.InspectAsset",
         "description": "Deep single-asset contract with semantic annotations; returns YAML.",
         "inputSchema": {
             "type": "object",
@@ -46,6 +49,7 @@ TOOL_DEFS: list[dict[str, Any]] = [
     },
     {
         "name": "ual_get_cooccurring_bundle",
+        "mcp_name": "UEAssetLens.AssetSemanticToolset.GetCooccurringBundle",
         "description": "Co-occurrence graph bundle recommendation; returns TOON.",
         "inputSchema": {
             "type": "object",
@@ -58,6 +62,7 @@ TOOL_DEFS: list[dict[str, Any]] = [
     },
     {
         "name": "ual_find_similar_assets",
+        "mcp_name": "UEAssetLens.AssetSemanticToolset.FindSimilarAssets",
         "description": "Deterministic 16-dim fingerprint duplicate detection; returns TOON.",
         "inputSchema": {
             "type": "object",
@@ -163,7 +168,7 @@ def ual_find_similar_assets(
     )
 
 
-TOOL_NAMES = (
-    "ual_search_assets", "ual_inspect_asset",
-    "ual_get_cooccurring_bundle", "ual_find_similar_assets",
-)
+# Externally visible MCP tool names (official qualified form). Python
+# implementation function names above stay snake_case by design; see
+# docs/mcp-positioning.md section 2.1.
+TOOL_NAMES = tuple(d["mcp_name"] for d in TOOL_DEFS)

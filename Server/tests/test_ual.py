@@ -164,10 +164,10 @@ def test_engine_bridge_dispatches_all_four_tools(ro):
     from ual_mcp import engine_bridge
 
     cases = [
-        ("ual_search_assets", {"asset_class": "AnimMontage", "limit": 2}),
-        ("ual_inspect_asset", {"key": "AnimMontage:AM_Knight_HeavySlash_02"}),
-        ("ual_get_cooccurring_bundle", {"asset_path": HERO, "top_k": 2}),
-        ("ual_find_similar_assets", {"asset_path": HERO, "threshold": 0.95}),
+        ("UEAssetLens.AssetSemanticToolset.SearchAssets", {"asset_class": "AnimMontage", "limit": 2}),
+        ("UEAssetLens.AssetSemanticToolset.InspectAsset", {"key": "AnimMontage:AM_Knight_HeavySlash_02"}),
+        ("UEAssetLens.AssetSemanticToolset.GetCooccurringBundle", {"asset_path": HERO, "top_k": 2}),
+        ("UEAssetLens.AssetSemanticToolset.FindSimilarAssets", {"asset_path": HERO, "threshold": 0.95}),
     ]
     for name, arguments in cases:
         text = engine_bridge.dispatch(ro, name, arguments)
@@ -183,7 +183,7 @@ def test_tool_schemas_contract_matches_python_server():
 
     schema_path = Path(__file__).resolve().parents[1] / "ual_mcp" / "tool_schemas.yaml"
     payload = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == "2.0"
+    assert payload["schema_version"] == "3.0"
     assert [t["name"] for t in payload["tools"]] == list(mcp_tools.TOOL_NAMES)
     for tool in payload["tools"]:
         assert tool["inputSchema"]["type"] == "object"
@@ -201,5 +201,5 @@ def test_server_tool_schemas_match_tool_defs(ro):
     assert set(generated) == set(mcp_tools.TOOL_NAMES)
     for tool in mcp_tools.TOOL_DEFS:
         declared = set(tool["inputSchema"].get("properties", {}))
-        actual = set(generated[tool["name"]].get("properties", {}))
+        actual = set(generated[tool["mcp_name"]].get("properties", {}))
         assert declared == actual, tool["name"]
