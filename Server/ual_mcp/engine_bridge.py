@@ -18,7 +18,6 @@ from __future__ import annotations
 import argparse
 import sys
 import tempfile
-import yaml
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +25,28 @@ SERVER_ROOT = Path(__file__).resolve().parents[1]
 if str(SERVER_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVER_ROOT))
 
+
+def _bootstrap_pip_site_packages() -> None:
+    """Expose UE6's official plugin pip dependencies to this child process.
+
+    The editor adds <Project>/Intermediate/PipInstall/Lib/site-packages to its
+    own embedded interpreter via PyUtil::AddSitePackagesPath. This script is
+    launched as a separate process, so it must add that path before importing
+    duckdb / yaml. Dependencies are declared in UEAssetLens.uplugin under
+    PythonRequirements and installed by PythonScriptPlugin.
+    """
+    here = Path(__file__).resolve().parent
+    for candidate in (here, *here.parents):
+        if any(candidate.glob("*.uproject")):
+            site_packages = candidate / "Intermediate" / "PipInstall" / "Lib" / "site-packages"
+            if site_packages.is_dir() and str(site_packages) not in sys.path:
+                sys.path.insert(0, str(site_packages))
+            break
+
+
+_bootstrap_pip_site_packages()
+
+import yaml  # noqa: E402
 from ual_common import db  # noqa: E402
 from ual_mcp import tools  # noqa: E402
 

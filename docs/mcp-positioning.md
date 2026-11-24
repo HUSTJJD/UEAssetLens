@@ -94,6 +94,11 @@ FTS BM25、共现图、TOON 压缩），而不在层级。
 `tools.TOOL_NAMES` 由 `TOOL_DEFS.mcp_name` 派生。生成器 6 页无漂移、44 项测试与
 三个 self-test 全部通过，对外工具名残留为 0。
 
+**运行时验证（2026-11-24）**：headless editor 下官方 MCP 握手成功，`tools/list` 返回
+4 个限定名 UAL 工具（旧名 0 残留）与 4 个 tool-search 元工具；`tools/call` 对 4 个 UAL
+工具全部返回真实 TOON / YAML 结果（PASS）。bridge 已改用引擎内嵌 Python 与官方
+`PythonRequirements` 安装的依赖，不再依赖 PATH 上的系统解释器。
+
 `Server/ual_mcp/tool_schemas.yaml` 的 `schema_version` 由 `2.0` bump 到 `3.0`，
 标记对外工具名的 breaking change。它与 DuckDB `schema_meta.schema_version`
 （见 `docs/reference/schema.md`，仍为 2.0）是两套独立契约，**不要混同或联动修改**。

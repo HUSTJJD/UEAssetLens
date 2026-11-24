@@ -31,6 +31,32 @@ namespace
 		return Value.IsEmpty() ? Fallback : Value;
 	}
 
+	FString ResolveDefaultPythonExecutable()
+	{
+		// UE6 ships its own Python 3.11 interpreter, and the official
+		// PythonRequirements mechanism installs plugin dependencies into
+		// <Project>/Intermediate/PipInstall/Lib/site-packages using that
+		// interpreter. The bridge runs as an external child process, so it
+		// must use the same ABI instead of whatever "python" resolves to on
+		// PATH (which may be a different major version without duckdb).
+#if PLATFORM_WINDOWS
+		const TCHAR* PlatformDir = TEXT("Win64");
+		const TCHAR* RelativeExe = TEXT("python.exe");
+#elif PLATFORM_MAC
+		const TCHAR* PlatformDir = TEXT("Mac");
+		const TCHAR* RelativeExe = TEXT("bin/python3");
+#elif PLATFORM_LINUX
+		const TCHAR* PlatformDir = TEXT("Linux");
+		const TCHAR* RelativeExe = TEXT("bin/python3");
+#else
+		return TEXT("python");
+#endif
+		const FString Candidate = FPaths::ConvertRelativePathToFull(
+			FPaths::Combine(FPaths::EngineDir(), TEXT("Binaries"), TEXT("ThirdParty"),
+				TEXT("Python3"), PlatformDir, RelativeExe));
+		return IFileManager::Get().FileExists(*Candidate) ? Candidate : TEXT("python");
+	}
+
 	FString ResolvePluginDir()
 	{
 		TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("UEAssetLens"));
@@ -63,7 +89,7 @@ FUALEngineMcpBridge::FUALEngineMcpBridge()
 	const FString DefaultIndex = FPaths::ConvertRelativePathToFull(
 		FPaths::Combine(FPaths::ProjectDir(), TEXT(".ual"), TEXT("index.duckdb")));
 	Paths.IndexFile = ReadSetting(TEXT("IndexPath"), DefaultIndex);
-	Paths.PythonExecutable = ReadSetting(TEXT("PythonExecutable"), TEXT("python"));
+	Paths.PythonExecutable = ReadSetting(TEXT("PythonExecutable"), ResolveDefaultPythonExecutable());
 
 	UE_LOGF(LogUALEngineMcp, Log, "UAL engine MCP bridge: python=%ls index=%ls",
 		*Paths.PythonExecutable, *Paths.IndexFile);

@@ -118,12 +118,22 @@ MCP client → Epic Unreal MCP (HTTP) → FUALEngineMcpTool::RunAsync (线程池
 3. 启动编辑器；`UEAssetLensMCP` 在 `PostEngineInit` 自动 `AddTool`。控制台执行 `ModelContextProtocol.RefreshTools` 可热重载。
 4. 客户端连接 `http://127.0.0.1:8000/mcp`；`tools/list` 应出现 `UEAssetLens.AssetSemanticToolset.SearchAssets` 等 4 个工具。
 
-配置（`DefaultEditorPerProject.ini`，路径为空时用默认值）：
+**Python 依赖走 UE 官方途径**：`UEAssetLens.uplugin` 的 `PythonRequirements` 声明
+`duckdb==2.0.0` 与 `PyYAML==6.0.3`（带官方 wheel hash），由 `PythonScriptPlugin` 在
+编辑器启动或 `UnrealBuildTool -Mode=PipInstall` 时安装到
+`<Project>/Intermediate/PipInstall/Lib/site-packages`。`engine_bridge.py` 由
+`UALEngineMcpBridge` 用**引擎内嵌 Python**（`Engine/Binaries/ThirdParty/Python3/<Platform>/python.exe`）
+启动，并在导入第三方包前把该 site-packages 加入 `sys.path`，因此无需配置 venv 或绝对路径。
+`Server/requirements.txt` 仅用于独立 Python MCP server 与 CI。
+
+配置（`DefaultEditorPerProject.ini`，一般无需设置；留空即用默认值）：
 
 ```ini
 [/Script/UEAssetLensMCP.UALEngineMcpSettings]
-PythonExecutable=D:/learning/AnnBuildTools/Ann/Plugins/UEAssetLens/.venv/Scripts/python.exe
-IndexPath=D:/learning/AnnBuildTools/Ann/.ual/index.duckdb
+; 可选：覆盖默认的引擎内嵌解释器
+; PythonExecutable=<path to python>
+; 可选：覆盖默认索引 <Project>/.ual/index.duckdb
+; IndexPath=<path to index.duckdb>
 ```
 
 约束与边界见 `docs/known-limitations.md`：每次工具调用启动一个 Python 子进程（百毫秒级，已用 `RunAsync` 避免阻塞 game thread）；官方 server 仅 loopback、无认证、实验性；离线 CI 门禁仍走 `ual-cli`，不依赖编辑器。
