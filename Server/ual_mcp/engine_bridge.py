@@ -73,6 +73,26 @@ def dispatch(con: Any, name: str, arguments: dict[str, Any]) -> str:
         return tools.ual_get_cooccurring_bundle(con, args["asset_path"], args.get("top_k", 5))
     if name == "UEAssetLens.AssetSemanticToolset.FindSimilarAssets":
         return tools.ual_find_similar_assets(con, args["asset_path"], args.get("threshold", 0.85))
+    if name == "UEAssetLens.AssetGraphToolset.GetDependencies":
+        return tools.ual_get_dependencies(
+            con, args.get("asset_path") or "", args.get("max_depth", 2),
+            args.get("edge_type", "DEPENDS_ON"), args.get("limit", 50))
+    if name == "UEAssetLens.AssetGraphToolset.GetReferencers":
+        return tools.ual_get_referencers(
+            con, args.get("asset_path") or "", args.get("max_depth", 2),
+            args.get("edge_type", "DEPENDS_ON"), args.get("limit", 50))
+    if name == "UEAssetLens.AssetGraphToolset.GetIndexHealth":
+        return tools.ual_get_index_health(con, args.get("top_n", 5))
+    if name == "UEAssetLens.AssetGraphToolset.FindDuplicates":
+        return tools.ual_find_duplicates(con, args.get("threshold", 0.95), args.get("limit", 20))
+    if name == "UEAssetLens.AssetSemanticToolset.SearchByFeatures":
+        return tools.ual_search_by_features(
+            con, feature_key=args.get("feature_key"),
+            value_contains=args.get("value_contains"),
+            asset_class=args.get("asset_class"), family=args.get("family"),
+            limit=args.get("limit", 20))
+    if name == "UEAssetLens.AssetSemanticToolset.ListFeatureKeys":
+        return tools.ual_list_feature_keys(con, args.get("limit", 50))
     raise AssertionError("unreachable")
 
 
@@ -111,6 +131,12 @@ def self_test() -> int:
         ("UEAssetLens.AssetSemanticToolset.InspectAsset", {"key": "AnimMontage:AM_Knight_HeavySlash_02"}),
         ("UEAssetLens.AssetSemanticToolset.GetCooccurringBundle", {"asset_path": hero, "top_k": 3}),
         ("UEAssetLens.AssetSemanticToolset.FindSimilarAssets", {"asset_path": hero, "threshold": 0.95}),
+        ("UEAssetLens.AssetGraphToolset.GetDependencies", {"asset_path": hero, "max_depth": 3}),
+        ("UEAssetLens.AssetGraphToolset.GetReferencers", {"asset_path": hero, "max_depth": 3}),
+        ("UEAssetLens.AssetGraphToolset.GetIndexHealth", {"top_n": 5}),
+        ("UEAssetLens.AssetGraphToolset.FindDuplicates", {"threshold": 0.95, "limit": 10}),
+        ("UEAssetLens.AssetSemanticToolset.SearchByFeatures", {"feature_key": "kinematics"}),
+        ("UEAssetLens.AssetSemanticToolset.ListFeatureKeys", {"limit": 20}),
     ]
     ok = True
     ro = db.open_readonly(index)

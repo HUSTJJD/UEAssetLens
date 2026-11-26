@@ -39,6 +39,16 @@ interface_spec:
   sockets_referenced: '[hand_r_weapon]'
   material_slots: '[]'
 domain_spec:
+  feature.family: 'Animation'
+  feature.class_path: '/Script/Engine.AnimMontage'
+  feature.path_depth: '5'
+  feature.name_tokens: '6'
+  feature.tag_count: '3'
+  feature.tag_keys: '[BoundsSize, SequenceLength, Skeleton]'
+  feature.capabilities: '[has_bounds, has_skeleton]'
+  feature.stats: '{numeric_count: 3, mean: 84.1667, min: 1.15, max: 185.0, sum: 252.5}'
+  feature.profile: '{SequenceLength: 1.15, Skeleton: /Game/Characters/Knight/SK_Knight}'
+  feature.profile_rule: 'SequenceLength|FrameRate|NumFrames|Skeleton|RootMotion|Notif|Curve|Additive|Loop'
   forward_cm: '185.0'
   strike_window: 0.35..0.58
   root_motion_delta: '[185.0, 0.0, 0.0]'
@@ -97,6 +107,16 @@ interface_spec:
   sockets_referenced: '[hand_r_weapon]'
   material_slots: '[]'
 domain_spec:
+  feature.family: 'Animation'
+  feature.class_path: '/Script/Engine.AnimMontage'
+  feature.path_depth: '5'
+  feature.name_tokens: '6'
+  feature.tag_count: '3'
+  feature.tag_keys: '[BoundsSize, SequenceLength, Skeleton]'
+  feature.capabilities: '[has_bounds, has_skeleton]'
+  feature.stats: '{numeric_count: 3, mean: 84.1667, min: 1.15, max: 185.0, sum: 252.5}'
+  feature.profile: '{SequenceLength: 1.15, Skeleton: /Game/Characters/Knight/SK_Knight}'
+  feature.profile_rule: 'SequenceLength|FrameRate|NumFrames|Skeleton|RootMotion|Notif|Curve|Additive|Loop'
   forward_cm: '183.0'
   strike_window: 0.35..0.59
   root_motion_delta: '[183.0, 0.0, 0.0]'
@@ -146,6 +166,16 @@ interface_spec:
   sockets_referenced: '[hand_r_weapon]'
   material_slots: '[]'
 domain_spec:
+  feature.family: 'Animation'
+  feature.class_path: '/Script/Engine.AnimMontage'
+  feature.path_depth: '5'
+  feature.name_tokens: '6'
+  feature.tag_count: '3'
+  feature.tag_keys: '[BoundsSize, SequenceLength, Skeleton]'
+  feature.capabilities: '[has_bounds, has_skeleton]'
+  feature.stats: '{numeric_count: 3, mean: 84.1667, min: 1.15, max: 185.0, sum: 252.5}'
+  feature.profile: '{SequenceLength: 1.15, Skeleton: /Game/Characters/Knight/SK_Knight}'
+  feature.profile_rule: 'SequenceLength|FrameRate|NumFrames|Skeleton|RootMotion|Notif|Curve|Additive|Loop'
   forward_cm: '320.0'
   strike_window: 0.25..0.45
   root_motion_delta: '[320.0, 0.0, 0.0]'
@@ -195,6 +225,16 @@ interface_spec:
   sockets_referenced: '[hand_r_weapon]'
   material_slots: '[]'
 domain_spec:
+  feature.family: 'Animation'
+  feature.class_path: '/Script/Engine.AnimMontage'
+  feature.path_depth: '5'
+  feature.name_tokens: '6'
+  feature.tag_count: '3'
+  feature.tag_keys: '[BoundsSize, SequenceLength, Skeleton]'
+  feature.capabilities: '[has_bounds, has_skeleton]'
+  feature.stats: '{numeric_count: 3, mean: 84.1667, min: 1.15, max: 185.0, sum: 252.5}'
+  feature.profile: '{SequenceLength: 1.15, Skeleton: /Game/Characters/Knight/SK_Knight}'
+  feature.profile_rule: 'SequenceLength|FrameRate|NumFrames|Skeleton|RootMotion|Notif|Curve|Additive|Loop'
   forward_cm: '60.0'
   strike_window: 0.40..0.75
   root_motion_delta: '[60.0, 0.0, 0.0]'
@@ -243,6 +283,16 @@ interface_spec:
   sockets_referenced: '[hand_r_weapon, hand_l_weapon]'
   material_slots: '[M_Body, M_Armor, M_Weapon]'
 domain_spec:
+  feature.family: 'Mesh'
+  feature.class_path: '/Script/Engine.SkeletalMesh'
+  feature.path_depth: '5'
+  feature.name_tokens: '6'
+  feature.tag_count: '3'
+  feature.tag_keys: '[BoundsSize, SequenceLength, Skeleton]'
+  feature.capabilities: '[has_bounds, has_skeleton]'
+  feature.stats: '{numeric_count: 3, mean: 84.1667, min: 1.15, max: 185.0, sum: 252.5}'
+  feature.profile: '{SequenceLength: 1.15, Skeleton: /Game/Characters/Knight/SK_Knight}'
+  feature.profile_rule: 'Triangle|Vertex|LOD|Material|Socket|Nanite|Bounds|Skeleton|Collision|UV'
   hint: Humanoid|6sockets|SK_Knight
 edges: []
 yaml_cache: "# UEAssetLens AssetSpec v2.0 (Auto-generated, Zero-VLM)\n\nidentity:\n  logical_id: SkeletalMesh:SK_Knight\n  asset_path: /Game/Characters/Knight/SK_Knight\n  asset_class: SkeletalMesh\n  parent_class: SkeletalMesh\n  taxonomy: [Asset, Mesh, Skeletal]\n\n# interface_contract: what an Agent may bind to without hallucinating.\ninterface_contract:\n  skeleton: /Game/Characters/Knight/SK_Knight\n  sockets_referenced: [hand_r_weapon, hand_l_weapon] # weapon / hitbox attach candidates\n  material_slots: [M_Body, M_Armor, M_Weapon]\n\ndomain_spec:\n  duration: 0 # unit: seconds\n  kinematics:\n    root_motion_delta: [0, 0, 0] # deterministic root displacement (cm)\n    forward_cm: 0\n    peak_velocity: 0\n    is_airborne: false\n    dominant_limbs: [None] # inferred from kinetic energy curve\n  phases:\n    windup: [0, 0] # auto-split from kinetic peaks\n    active_strike: [0, 0] # auto-split from kinetic peaks\n    recovery: [0, 0] # auto-split from kinetic peaks\n  strike_window: \n  notifies:\n    []\n\n# graph_context: dependency edges from asset_edges, not a guess.\ngraph_context:\n  referenced_by_count: 0\n  top_referencers: []\n"
@@ -284,6 +334,16 @@ fingerprint_vec:
 interface_spec:
   skeleton: ''
 domain_spec:
+  feature.family: 'Material'
+  feature.class_path: '/Script/Engine.MaterialInstanceConstant'
+  feature.path_depth: '5'
+  feature.name_tokens: '6'
+  feature.tag_count: '3'
+  feature.tag_keys: '[BoundsSize, SequenceLength, Skeleton]'
+  feature.capabilities: '[has_bounds, has_skeleton]'
+  feature.stats: '{numeric_count: 3, mean: 84.1667, min: 1.15, max: 185.0, sum: 252.5}'
+  feature.profile: '{SequenceLength: 1.15, Skeleton: /Game/Characters/Knight/SK_Knight}'
+  feature.profile_rule: 'Parent|BlendMode|ShadingModel|UsedTextures|Parameter|TwoSided|MaterialDomain|Expression'
   hint: Opaque|SupportsDissolve|SupportsHitFlash
   forward_cm: '0'
   exposed_params: DissolveAmount,HitFlashIntensity,Roughness
@@ -327,6 +387,16 @@ fingerprint_vec:
 interface_spec:
   skeleton: ''
 domain_spec:
+  feature.family: 'VFX'
+  feature.class_path: '/Script/Engine.NiagaraSystem'
+  feature.path_depth: '5'
+  feature.name_tokens: '6'
+  feature.tag_count: '3'
+  feature.tag_keys: '[BoundsSize, SequenceLength, Skeleton]'
+  feature.capabilities: '[has_bounds, has_skeleton]'
+  feature.stats: '{numeric_count: 3, mean: 84.1667, min: 1.15, max: 185.0, sum: 252.5}'
+  feature.profile: '{SequenceLength: 1.15, Skeleton: /Game/Characters/Knight/SK_Knight}'
+  feature.profile_rule: 'Emitter|System|Parameter|GPU|Simulation|Renderer|Spawn|Module'
   hint: Once|1.2s|User.SlashColor
   forward_cm: '0'
   exposed_params: SlashColor,SlashWidth,TrailLength
@@ -370,6 +440,16 @@ fingerprint_vec:
 interface_spec:
   skeleton: ''
 domain_spec:
+  feature.family: 'Audio'
+  feature.class_path: '/Script/Engine.SoundWave'
+  feature.path_depth: '5'
+  feature.name_tokens: '6'
+  feature.tag_count: '3'
+  feature.tag_keys: '[BoundsSize, SequenceLength, Skeleton]'
+  feature.capabilities: '[has_bounds, has_skeleton]'
+  feature.stats: '{numeric_count: 3, mean: 84.1667, min: 1.15, max: 185.0, sum: 252.5}'
+  feature.profile: '{SequenceLength: 1.15, Skeleton: /Game/Characters/Knight/SK_Knight}'
+  feature.profile_rule: 'Duration|SampleRate|Channel|Compression|Loop|Quality|SoundClass|Submix|Attenuation'
   hint: Mono|0.85s|3D_Combat
   forward_cm: '0'
 edges: []
@@ -412,6 +492,16 @@ fingerprint_vec:
 interface_spec:
   skeleton: ''
 domain_spec:
+  feature.family: 'Blueprint'
+  feature.class_path: '/Script/Engine.Blueprint'
+  feature.path_depth: '5'
+  feature.name_tokens: '6'
+  feature.tag_count: '3'
+  feature.tag_keys: '[BoundsSize, SequenceLength, Skeleton]'
+  feature.capabilities: '[has_bounds, has_skeleton]'
+  feature.stats: '{numeric_count: 3, mean: 84.1667, min: 1.15, max: 185.0, sum: 252.5}'
+  feature.profile: '{SequenceLength: 1.15, Skeleton: /Game/Characters/Knight/SK_Knight}'
+  feature.profile_rule: 'ParentClass|GeneratedClass|BlueprintType|Interface|Variable|Function|Component'
   hint: Ability|Combo2
   forward_cm: '0'
 edges:

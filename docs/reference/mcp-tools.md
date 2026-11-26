@@ -3,7 +3,7 @@
 
 > 生成来源：`Server/ual_mcp/tools.py`（`TOOL_DEFS` 与 TOON 字段顺序）。MCP Server 只读连接 `.ual/index.duckdb`。
 
-共 **4** 个工具。批量工具返回 TOON，单资产工具返回 YAML。
+共 **10** 个工具。批量工具返回 TOON，单资产工具返回 YAML。
 
 ## `UEAssetLens.AssetSemanticToolset.SearchAssets`
 
@@ -59,6 +59,89 @@ Deterministic 16-dim fingerprint duplicate detection; returns TOON.
 
 **实现**：`Server/ual_mcp/tools.py`
 
+## `UEAssetLens.AssetGraphToolset.GetDependencies`
+
+Bounded multi-hop dependency walk (what this asset references); returns TOON.
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `asset_path` | `string` | 是 |  | Source package path, e.g. /Game/Characters/Knight/AM_Knight_HeavySlash_02 |
+| `max_depth` | `integer` | 否 | `2` | BFS depth, 1..6 |
+| `edge_type` | `string` | 否 | `DEPENDS_ON` | DEPENDS_ON \| CO_OCCURS \| ANY |
+| `limit` | `integer` | 否 | `50` |  |
+
+**返回**：TOON：section `dependencies`（有界多跳 BFS）
+
+**实现**：`Server/ual_common/db.py::graph_traverse`
+
+## `UEAssetLens.AssetGraphToolset.GetReferencers`
+
+Reverse impact surface: who references this asset, transitively; returns TOON.
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `asset_path` | `string` | 是 |  |  |
+| `max_depth` | `integer` | 否 | `2` |  |
+| `edge_type` | `string` | 否 | `DEPENDS_ON` | DEPENDS_ON \| CO_OCCURS \| ANY |
+| `limit` | `integer` | 否 | `50` |  |
+
+**返回**：TOON：section `referencers`（反向影响面 BFS）
+
+**实现**：`Server/ual_common/db.py::graph_traverse`
+
+## `UEAssetLens.AssetGraphToolset.GetIndexHealth`
+
+Index quality report: edge counts, broken/orphan/external references, hotspots and family distribution; returns TOON.
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `top_n` | `integer` | 否 | `5` |  |
+
+**返回**：TOON：section `metrics` + `hotspots` + `families`
+
+**实现**：`Server/ual_common/db.py::index_health`
+
+## `UEAssetLens.AssetGraphToolset.FindDuplicates`
+
+Whole-index 16-dim fingerprint duplicate pairs (use InspectAsset to confirm); returns TOON.
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `threshold` | `number` | 否 | `0.95` |  |
+| `limit` | `integer` | 否 | `20` |  |
+
+**返回**：TOON：section `duplicate_pairs`（全库 16 维指纹）
+
+**实现**：`Server/ual_common/db.py::duplicate_pairs`
+
+## `UEAssetLens.AssetSemanticToolset.SearchByFeatures`
+
+Retrieve assets by normalized feature.* keys emitted by the typed extractor; returns TOON.
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `feature_key` | `string` | 否 |  | Key substring, e.g. feature.mesh or kinematics; omit to list all feature.* keys |
+| `value_contains` | `string` | 否 |  | Optional case-insensitive value substring |
+| `asset_class` | `string` | 否 |  |  |
+| `family` | `string` | 否 |  | taxonomy family, e.g. Animation |
+| `limit` | `integer` | 否 | `20` |  |
+
+**返回**：TOON：section `features`（按 `feature.*` 键检索）
+
+**实现**：`Server/ual_common/db.py::search_by_features`
+
+## `UEAssetLens.AssetSemanticToolset.ListFeatureKeys`
+
+Catalog of feature.* keys present in the index with asset counts; returns TOON.
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `limit` | `integer` | 否 | `50` |  |
+
+**返回**：TOON：section `feature_keys`（特征词表）
+
+**实现**：`Server/ual_common/db.py::feature_key_catalog`
+
 ## TOON section 字段顺序
 
 | section | 字段（顺序固定） |
@@ -66,6 +149,13 @@ Deterministic 16-dim fingerprint duplicate detection; returns TOON.
 | `candidates` | `logical_id`, `duration`, `forward_cm`, `strike_window`, `limb`, `score` |
 | `co_occurring_bundle` | `logical_id`, `asset_class`, `weight`, `hint` |
 | `similar_assets` | `logical_id`, `asset_class`, `similarity`, `shared_class` |
+| `dependencies / referencers` | `logical_id`, `asset_path`, `depth`, `edge_type`, `weight`, `via_path` |
+| `metrics` | `metric`, `value`, `detail` |
+| `hotspots` | `logical_id`, `asset_class`, `referenced_by` |
+| `families` | `family`, `asset_count` |
+| `duplicate_pairs` | `lhs_id`, `rhs_id`, `similarity` |
+| `features` | `logical_id`, `asset_class`, `feature_key`, `feature_value` |
+| `feature_keys` | `feature_key`, `spec_source`, `asset_count` |
 
 字段顺序与转义规则见 `docs/reference/protocol.md`。
 

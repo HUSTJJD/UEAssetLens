@@ -2,6 +2,7 @@
 
 #include "UALExtractorRegistry.h"
 #include "FUniversalReflectionExtractor.h"
+#include "UALTypedFeatureExtractor.h"
 #include "UALYamlIndexSink.h"
 #include "UEYaml.h"
 #include "UALTypes.h"
@@ -20,6 +21,66 @@
 #include "Dom/JsonObject.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUALIndexBuilder, Log, All);
+
+namespace
+{
+	/** Deterministic name tokenizer shared by the co-occurrence heuristic. */
+	TSet<FString> NameTokens(const FString& Name)
+	{
+		TSet<FString> Out;
+		FString Current;
+		for (int32 i = 0; i < Name.Len(); ++i)
+		{
+			const TCHAR Ch = Name[i];
+			if (FChar::IsAlnum(Ch))
+			{
+				const bool bCamelBoundary = FChar::IsUpper(Ch) && Current.Len() > 0 &&
+					(FChar::IsLower(Name[i - 1]) || FChar::IsDigit(Name[i - 1]));
+				if (bCamelBoundary)
+				{
+					Out.Add(Current.ToLower());
+					Current.Empty();
+				}
+				Current.AppendChar(Ch);
+			}
+			else if (Current.Len() > 0)
+			{
+				Out.Add(Current.ToLower());
+				Current.Empty();
+			}
+		}
+		if (Current.Len() > 0)
+		{
+			Out.Add(Current.ToLower());
+		}
+		return Out;
+	}
+
+	double Jaccard(const TSet<FString>& A, const TSet<FString>& B)
+	{
+		if (A.Num() == 0 || B.Num() == 0)
+		{
+			return 0.0;
+		}
+		int32 Intersection = 0;
+		for (const FString& Token : A)
+		{
+			if (B.Contains(Token))
+			{
+				++Intersection;
+			}
+		}
+		const int32 Union = A.Num() + B.Num() - Intersection;
+		return (Union > 0) ? (double)Intersection / (double)Union : 0.0;
+	}
+
+	/** A package path that is a class/script reference is not an indexable asset. */
+	bool IsIndexableDependency(const FName& PackageName)
+	{
+		const FString Path = PackageName.ToString();
+		return !Path.IsEmpty() && !Path.StartsWith(TEXT("/Script"), ESearchCase::IgnoreCase);
+	}
+}
 
 UUALIndexBuilderCommandlet::UUALIndexBuilderCommandlet(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -161,10 +222,12 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 	UE_LOG(LogUALIndexBuilder, Log, TEXT("Scan roots (%d): %s"),
 		ScanPaths.Num(), *FString::Join(ScanPaths, TEXT(", ")));
 
-	// 3) 提取器注册表：显式注册通用兜底（Priority 0）。
-	//    领域提取器（Priority 100）可由其它模块通过 Register 注入。
+	// 3) 提取器注册表：通用兜底（Priority 0）+ 全资产特征规范化器（Priority 100）。
+	//    Typed 提取器内部先复用 Universal 的 16 键结果，再追加 feature.* 键；
+	//    单一 AssetClass 专属提取器可继续以 Priority 100 Register 注入。
 	FUALExtractorRegistry Registry;
 	Registry.Register(MakeShared<FUniversalReflectionExtractor>());
+	Registry.Register(MakeShared<FUALTypedFeatureExtractor>());
 
 	// 4) 增量：读取已有清单的 content_hash。
 	TMap<FString, FString> ExistingHashes;
@@ -206,12 +269,26 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 	UE_LOG(LogUALIndexBuilder, Log, TEXT("AssetRegistry returned %d unique assets over %d root(s)"),
 		Assets.Num(), ScanPaths.Num());
 
+	// 6b) 共现分组：同目录 + 名称 token Jaccard，纯确定性数学，不加载资源。
+	//     每个资产最多产出 8 条 CO_OCCURS 边，避免大目录边数爆炸。
+	const int32 MaxCoOccurrence = 8;
+	TMap<FString, TArray<int32>> FolderGroups;
+	TArray<TSet<FString>> AssetTokens;
+	AssetTokens.SetNum(Assets.Num());
+	for (int32 i = 0; i < Assets.Num(); ++i)
+	{
+		FolderGroups.FindOrAdd(FPaths::GetPath(Assets[i].PackageName.ToString())).Add(i);
+		AssetTokens[i] = NameTokens(Assets[i].AssetName.ToString());
+	}
+
 	int32 Written = 0;
 	int32 Skipped = 0;
 	int32 EdgeCount = 0;
+	int32 CoOccurCount = 0;
 
-	for (const FAssetData& Asset : Assets)
+	for (int32 AssetIdx = 0; AssetIdx < Assets.Num(); ++AssetIdx)
 	{
+		const FAssetData& Asset = Assets[AssetIdx];
 		FUALAssetRecord Record;
 		if (!Registry.ExtractRecord(Asset, Record))
 		{
@@ -234,13 +311,16 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 		++Written;
 
 		// 7) DEPENDS_ON 边：只读 AssetRegistry 依赖关系，不加载资源。
-		//    用 FAssetIdentifier 核心接口（UE5 IAssetRegistry 稳定签名），
-		//    目标可能指向 /Script 或引擎内容，交由 Python 灌库侧过滤。
+		//    /Script/... 是 UClass 引用而非资产包，在此过滤，避免污染引用图谱。
 		TArray<FAssetIdentifier> Dependencies;
 		AR.GetDependencies(FAssetIdentifier(Asset.PackageName), Dependencies,
 			UE::AssetRegistry::EDependencyCategory::All);
 		for (const FAssetIdentifier& Dep : Dependencies)
 		{
+			if (!IsIndexableDependency(Dep.PackageName))
+			{
+				continue;
+			}
 			FUALEdgeRecord Edge;
 			Edge.SourcePath = Record.AssetPath;
 			Edge.TargetPath = Dep.PackageName.ToString();
@@ -249,12 +329,46 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 			Sink.AppendEdge(Edge);
 			++EdgeCount;
 		}
+
+		// 8) CO_OCCURS 边：同目录资产按名称 token 相似度装配。
+		//    权重 = 0.5 + 0.5 * Jaccard，范围 [0.5, 1.0]，完全可复现。
+		const FString Folder = FPaths::GetPath(Asset.PackageName.ToString());
+		const TArray<int32>* Peers = FolderGroups.Find(Folder);
+		if (Peers != nullptr && Peers->Num() > 1)
+		{
+			TArray<TPair<double, FString>> Scored;
+			for (int32 PeerIdx : *Peers)
+			{
+				if (PeerIdx == AssetIdx)
+				{
+					continue;
+				}
+				Scored.Add(TPair<double, FString>(
+					Jaccard(AssetTokens[AssetIdx], AssetTokens[PeerIdx]),
+					Assets[PeerIdx].PackageName.ToString()));
+			}
+			Scored.Sort([](const TPair<double, FString>& A, const TPair<double, FString>& B)
+			{
+				return (A.Key > B.Key) || (A.Key == B.Key && A.Value < B.Value);
+			});
+			for (int32 k = 0; k < Scored.Num() && k < MaxCoOccurrence; ++k)
+			{
+				FUALEdgeRecord Edge;
+				Edge.SourcePath = Record.AssetPath;
+				Edge.TargetPath = Scored[k].Value;
+				Edge.EdgeType = EUALEdgeType::CO_OCCURS;
+				Edge.Weight = 0.5f + 0.5f * static_cast<float>(Scored[k].Key);
+				Sink.AppendEdge(Edge);
+				++EdgeCount;
+				++CoOccurCount;
+			}
+		}
 	}
 
 	const bool bCommitted = Sink.Commit();
 	UE_LOG(LogUALIndexBuilder, Log,
-		TEXT("=== UALIndexBuilder done: total=%d written=%d skipped=%d edges=%d commit=%d ==="),
-		Assets.Num(), Written, Skipped, EdgeCount, bCommitted ? 1 : 0);
+		TEXT("=== UALIndexBuilder done: total=%d written=%d skipped=%d edges=%d cooccurs=%d commit=%d ==="),
+		Assets.Num(), Written, Skipped, EdgeCount, CoOccurCount, bCommitted ? 1 : 0);
 
 	return bCommitted ? 0 : 1;
 }

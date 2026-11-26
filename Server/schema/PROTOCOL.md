@@ -96,7 +96,9 @@ TOON = Token-Oriented Object Notation。**头部一次性声明字段 Schema，�
 - 缺失值写空串（连续两个逗号），`NULL` 不写进 TOON。
 - 非表格型元信息用 `key: value` 放在 section 之前的 `query_summary` 中。
 
-### 四个工具的返回契约
+### 十个工具的返回契约
+
+工具分两组：`AssetSemanticToolset`（语义检索与特征）与 `AssetGraphToolset`（引用图谱与索引健康度）。全部为只读。
 
 | 工具 | section | 字段 |
 |---|---|---|
@@ -104,6 +106,16 @@ TOON = Token-Oriented Object Notation。**头部一次性声明字段 Schema，�
 | `UEAssetLens.AssetSemanticToolset.SearchAssets` | `co_occurring_bundle` | `logical_id,asset_class,weight,hint` |
 | `UEAssetLens.AssetSemanticToolset.GetCooccurringBundle` | `co_occurring_bundle` | 同上 |
 | `UEAssetLens.AssetSemanticToolset.FindSimilarAssets` | `similar_assets` | `logical_id,asset_class,similarity,shared_class` |
+| `UEAssetLens.AssetSemanticToolset.SearchByFeatures` | `features` | `logical_id,asset_class,feature_key,feature_value` |
+| `UEAssetLens.AssetSemanticToolset.ListFeatureKeys` | `feature_keys` | `feature_key,spec_source,asset_count` |
+| `UEAssetLens.AssetGraphToolset.GetDependencies` | `dependencies` | `logical_id,asset_path,depth,edge_type,weight,via_path` |
+| `UEAssetLens.AssetGraphToolset.GetReferencers` | `referencers` | 同上（反向影响面） |
+| `UEAssetLens.AssetGraphToolset.GetIndexHealth` | `metrics` / `hotspots` / `families` | `metric,value,detail` / `logical_id,asset_class,referenced_by` / `family,asset_count` |
+| `UEAssetLens.AssetGraphToolset.FindDuplicates` | `duplicate_pairs` | `lhs_id,rhs_id,similarity` |
+
+`GetDependencies` / `GetReferencers` 用有界递归 BFS（`max_depth` 1..6），`via_path` 携带完整访问路径并通过 `list_contains` 检测环路；`edge_type` 只接受 `DEPENDS_ON` / `CO_OCCURS` / `ANY` 三个枚举。所有用户输入走参数化 SQL。
+
+`feature.*` 键由 C++ `FUALTypedFeatureExtractor`（Priority 100）从 `FAssetData.TagsAndValues` 与确定性数学产出，写入既有 `domain_spec` MAP，**不新增列、不改 16 键交换契约**：`feature.family` / `feature.class_path` / `feature.path_depth` / `feature.name_tokens` / `feature.tag_count` / `feature.tag_keys` / `feature.capabilities` / `feature.stats` / `feature.profile` / `feature.profile_rule`。
 
 所有 TOON 输出首行固定为 `# UEAssetLens TOON v1 (Zero-VLM)`，便于 Agent 端识别格式。
 

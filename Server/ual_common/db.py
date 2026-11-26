@@ -428,3 +428,213 @@ def cooccurring(
 
 def all_assets(con: duckdb.DuckDBPyConnection) -> list[dict[str, Any]]:
     return _rows(con, "SELECT asset_path, logical_id, asset_class FROM assets ORDER BY asset_path")
+
+
+# --------------------------------------------------------------------------- graph helpers (read-only)
+
+VALID_EDGE_TYPES = ("DEPENDS_ON", "CO_OCCURS", "ANY")
+
+
+def graph_traverse(
+    con: duckdb.DuckDBPyConnection,
+    asset_path: str,
+    *,
+    direction: str = "out",
+    edge_type: str = "DEPENDS_ON",
+    max_depth: int = 2,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Deterministic bounded BFS over asset_edges.
+
+    direction="out" walks DEPENDS_ON targets (what this asset needs),
+    direction="in" walks reverse edges (impact surface: who would break).
+    The visited path is carried in via_path and checked with list_contains so
+    reference cycles terminate. Every user-supplied value is a bound parameter;
+    direction/edge_type are validated against fixed whitelists.
+    """
+    direction = direction if direction in ("out", "in") else "out"
+    edge_type = edge_type.upper() if edge_type.upper() in VALID_EDGE_TYPES else "DEPENDS_ON"
+    max_depth = max(1, min(int(max_depth or 2), 6))
+    limit = max(1, min(int(limit or 50), 200))
+    any_type = edge_type == "ANY"
+
+    if direction == "out":
+        seed = """
+            SELECT e.target_path AS node, 1 AS depth,
+                   e.source_path || '>' || e.target_path AS via_path,
+                   e.edge_type AS edge_type, e.weight AS weight
+            FROM asset_edges e
+            WHERE e.source_path = ? {type_clause}
+        """
+        step = """
+            SELECT e.target_path AS node, w.depth + 1 AS depth,
+                   w.via_path || '>' || e.target_path AS via_path,
+                   e.edge_type AS edge_type, e.weight AS weight
+            FROM w JOIN asset_edges e ON e.source_path = w.node
+            WHERE w.depth < ? {type_clause}
+              AND NOT list_contains(string_split(w.via_path, '>'), e.target_path)
+        """
+    else:
+        seed = """
+            SELECT e.source_path AS node, 1 AS depth,
+                   e.target_path || '<' || e.source_path AS via_path,
+                   e.edge_type AS edge_type, e.weight AS weight
+            FROM asset_edges e
+            WHERE e.target_path = ? {type_clause}
+        """
+        step = """
+            SELECT e.source_path AS node, w.depth + 1 AS depth,
+                   w.via_path || '<' || e.source_path AS via_path,
+                   e.edge_type AS edge_type, e.weight AS weight
+            FROM w JOIN asset_edges e ON e.target_path = w.node
+            WHERE w.depth < ? {type_clause}
+              AND NOT list_contains(string_split(w.via_path, '<'), e.source_path)
+        """
+
+    clause = "AND e.edge_type = ?" if not any_type else ""
+    params: list[Any] = [asset_path] if any_type else [asset_path, edge_type]
+    step_params: list[Any] = [max_depth] if any_type else [max_depth, edge_type]
+    sql = f"""
+        WITH RECURSIVE w(node, depth, via_path, edge_type, weight) AS (
+            {seed.format(type_clause=clause)}
+            UNION ALL
+            {step.format(type_clause=clause)}
+        )
+        SELECT COALESCE(a.logical_id, w.node) AS logical_id,
+               w.node AS asset_path,
+               COALESCE(a.asset_class, 'Unknown') AS asset_class,
+               w.depth AS depth, w.edge_type AS edge_type,
+               w.via_path AS via_path, w.weight AS weight
+        FROM w LEFT JOIN assets a ON a.asset_path = w.node
+        ORDER BY w.depth, w.node
+        LIMIT ?
+    """
+    return _rows(con, sql, params + step_params + [limit])
+
+
+def index_health(con: duckdb.DuckDBPyConnection, top_n: int = 5) -> dict[str, list[dict[str, Any]]]:
+    """Read-only index quality report; no schema writes, no external calls."""
+    top_n = max(1, min(int(top_n or 5), 20))
+    scalars: list[tuple[str, str, str]] = [
+        ("assets_total", "SELECT COUNT(*) FROM assets", "indexed assets"),
+        ("edges_total", "SELECT COUNT(*) FROM asset_edges", "all graph edges"),
+        ("depends_on_edges", "SELECT COUNT(*) FROM asset_edges WHERE edge_type = 'DEPENDS_ON'", "hard/reference edges"),
+        ("co_occurs_edges", "SELECT COUNT(*) FROM asset_edges WHERE edge_type = 'CO_OCCURS'", "co-occurrence edges"),
+        ("distinct_classes", "SELECT COUNT(DISTINCT asset_class) FROM assets", "UClass coverage"),
+        ("missing_fingerprint", "SELECT COUNT(*) FROM assets WHERE fingerprint_vec IS NULL", "cannot participate in dedup"),
+        ("missing_taxonomy", "SELECT COUNT(*) FROM assets WHERE taxonomy IS NULL OR len(taxonomy) = 0", "unclassified"),
+        ("broken_references",
+         "SELECT COUNT(*) FROM asset_edges e LEFT JOIN assets a ON a.asset_path = e.target_path "
+         "WHERE a.asset_path IS NULL", "edges whose target is not indexed"),
+        ("external_references",
+         "SELECT COUNT(*) FROM asset_edges WHERE NOT starts_with(target_path, '/Game')", "engine/plugin/script targets"),
+        ("orphan_assets",
+         "SELECT COUNT(*) FROM assets a WHERE NOT EXISTS "
+         "(SELECT 1 FROM asset_edges e WHERE e.source_path = a.asset_path OR e.target_path = a.asset_path)",
+         "no graph edges at all"),
+        ("external_reference_targets",
+         "SELECT COUNT(DISTINCT target_path) FROM asset_edges WHERE NOT starts_with(target_path, '/Game')",
+         "unique out-of-project targets"),
+    ]
+    metrics = []
+    for name, sql, detail in scalars:
+        value = con.execute(sql).fetchone()[0]
+        metrics.append({"metric": name, "value": int(value), "detail": detail})
+
+    hotspots = _rows(
+        con,
+        """
+        SELECT a.logical_id, a.asset_class, COUNT(*) AS referenced_by
+        FROM asset_edges e JOIN assets a ON a.asset_path = e.target_path
+        WHERE e.edge_type = 'DEPENDS_ON'
+        GROUP BY a.logical_id, a.asset_class
+        ORDER BY referenced_by DESC, a.logical_id
+        LIMIT ?
+        """,
+        [top_n],
+    )
+    families = _rows(
+        con,
+        """
+        SELECT taxonomy[2] AS family, COUNT(*) AS asset_count
+        FROM assets WHERE taxonomy IS NOT NULL AND len(taxonomy) >= 2
+        GROUP BY family ORDER BY asset_count DESC, family LIMIT ?
+        """,
+        [top_n],
+    )
+    return {"metrics": metrics, "hotspots": hotspots, "families": families}
+
+
+# --------------------------------------------------------------------------- feature helpers (read-only)
+
+def search_by_features(
+    con: duckdb.DuckDBPyConnection,
+    *,
+    feature_key: str | None = None,
+    value_contains: str | None = None,
+    asset_class: str | None = None,
+    family: str | None = None,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Query the normalized `feature.*` keys emitted by FUALTypedFeatureExtractor.
+
+    MAP(VARCHAR,VARCHAR) keys are expanded with map_keys/UNNEST; the value is
+    fetched through the MAP subscript so no whole-database dump reaches the model.
+    """
+    limit = max(1, min(int(limit or 20), 100))
+    where: list[str] = []
+    params: list[Any] = []
+    if feature_key:
+        where.append("k.key_name ILIKE ?")
+        params.append("%" + str(feature_key) + "%")
+    else:
+        where.append("k.key_name LIKE 'feature.%'")
+    if value_contains:
+        where.append("CAST(m.spec[k.key_name] AS VARCHAR) ILIKE ?")
+        params.append("%" + str(value_contains) + "%")
+    if asset_class:
+        where.append("a.asset_class = ?")
+        params.append(str(asset_class))
+    if family:
+        where.append("a.taxonomy[2] = ?")
+        params.append(str(family))
+    sql = f"""
+        SELECT a.logical_id, a.asset_path, a.asset_class,
+               m.source AS spec_source, k.key_name AS feature_key,
+               CAST(m.spec[k.key_name] AS VARCHAR) AS feature_value
+        FROM assets a
+        JOIN (
+            SELECT asset_path, 'domain_spec' AS source, domain_spec AS spec FROM assets
+            UNION ALL
+            SELECT asset_path, 'interface_spec' AS source, interface_spec AS spec FROM assets
+        ) m ON m.asset_path = a.asset_path,
+        UNNEST(map_keys(m.spec)) AS k(key_name)
+        WHERE {' AND '.join(where)}
+        ORDER BY a.asset_path, k.key_name
+        LIMIT ?
+    """
+    return _rows(con, sql, params + [limit])
+
+
+def feature_key_catalog(con: duckdb.DuckDBPyConnection, limit: int = 50) -> list[dict[str, Any]]:
+    """List available feature keys so an Agent can discover the extractor's vocabulary."""
+    limit = max(1, min(int(limit or 50), 200))
+    return _rows(
+        con,
+        """
+        SELECT k.key_name AS feature_key, m.source AS spec_source,
+               COUNT(DISTINCT a.asset_path) AS asset_count
+        FROM assets a
+        JOIN (
+            SELECT asset_path, 'domain_spec' AS source, domain_spec AS spec FROM assets
+            UNION ALL
+            SELECT asset_path, 'interface_spec' AS source, interface_spec AS spec FROM assets
+        ) m ON m.asset_path = a.asset_path,
+        UNNEST(map_keys(m.spec)) AS k(key_name)
+        WHERE k.key_name LIKE 'feature.%'
+        GROUP BY k.key_name, m.source
+        ORDER BY asset_count DESC, k.key_name
+        LIMIT ?
+        """,
+        [limit],
+    )

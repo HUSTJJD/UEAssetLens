@@ -51,6 +51,30 @@ OUTPUTS: dict[str, tuple[str, str]] = {
         "TOON：section `similar_assets`",
         "`Server/ual_mcp/tools.py`",
     ),
+    "ual_get_dependencies": (
+        "TOON：section `dependencies`（有界多跳 BFS）",
+        "`Server/ual_common/db.py::graph_traverse`",
+    ),
+    "ual_get_referencers": (
+        "TOON：section `referencers`（反向影响面 BFS）",
+        "`Server/ual_common/db.py::graph_traverse`",
+    ),
+    "ual_get_index_health": (
+        "TOON：section `metrics` + `hotspots` + `families`",
+        "`Server/ual_common/db.py::index_health`",
+    ),
+    "ual_find_duplicates": (
+        "TOON：section `duplicate_pairs`（全库 16 维指纹）",
+        "`Server/ual_common/db.py::duplicate_pairs`",
+    ),
+    "ual_search_by_features": (
+        "TOON：section `features`（按 `feature.*` 键检索）",
+        "`Server/ual_common/db.py::search_by_features`",
+    ),
+    "ual_list_feature_keys": (
+        "TOON：section `feature_keys`（特征词表）",
+        "`Server/ual_common/db.py::feature_key_catalog`",
+    ),
 }
 
 
@@ -275,6 +299,13 @@ def parse_mcp_tools() -> str:
         "CANDIDATE_FIELDS": "candidates",
         "BUNDLE_FIELDS": "co_occurring_bundle",
         "SIMILAR_FIELDS": "similar_assets",
+        "DEPENDENCY_FIELDS": "dependencies / referencers",
+        "HEALTH_FIELDS": "metrics",
+        "HOTSPOT_FIELDS": "hotspots",
+        "FAMILY_FIELDS": "families",
+        "DUPLICATE_FIELDS": "duplicate_pairs",
+        "FEATURE_FIELDS": "features",
+        "FEATURE_KEY_FIELDS": "feature_keys",
     }
     for key, values in fields.items():
         rows.append([f"`{label.get(key, key)}`", ", ".join(f"`{v}`" for v in values)])
@@ -348,6 +379,7 @@ def parse_cli() -> str:
         "## 退出码", "",
         "| 命令 | 通过 | 拦截 | 环境错误 |", "| --- | --- | --- | --- |",
         "| `lint-duplicates` | 0 | 1（发现重复对） | 2（索引缺失） |",
+        "| `lint-policy` | 0 | 1（enforcing 规则命中或 --strict 命中） | 2（索引缺失） |",
         "| `verify-references` | 0 | 1（发现断裂引用） | 2（索引缺失） |",
         "| `build` / `export-parquet` / `self-test` | 0 | 1 | 2 |", "",
         "门禁细节与 CI 接入见 `ci-gates.md`。", "",

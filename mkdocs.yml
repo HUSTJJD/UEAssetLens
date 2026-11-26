@@ -50,6 +50,7 @@ nav:
   - 架构与治理:
       - 架构说明: architecture.md
       - MCP 定位与事务层规格: mcp-positioning.md
+      - 资产全生命周期架构: asset-lifecycle-architecture.md
       - CI 门禁: ci-gates.md
       - 已知限制: known-limitations.md
   - 参考（自动生成）:

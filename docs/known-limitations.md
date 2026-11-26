@@ -18,6 +18,7 @@
 | 12 | 每次工具调用启动一个 Python 进程 | M5 | 百毫秒级延迟；已用 `RunAsync` 避免阻塞 game thread，见 §12 |
 | 13 | Python MCP Server 硬依赖官方 SDK 2.x | M3 | 无手写协议降级；SDK 缺失即报错退出，离线环境走 `ual-cli`，见 §13 |
 | 14 | 全类型覆盖改造的 C++ 部分未经编译验证 | M1+ | pytest 44 项、CLI self-test 通过；C++ 仅静态审查，需本地 UE6 SDK 编译，见 §14 |
+| 15 | `custom` 策略规则需要进程内 `ExtensionRegistry` | Phase 0 | `lint-policy` 尚未装载 YAML 扩展清单，见 §15 |
 
 ---
 
@@ -37,7 +38,7 @@
 
 ## 4. TOON 为自定义方言
 
-TOON 不是社区标准。`Server/schema/PROTOCOL.md` 已定义语法、转义（逗号/双引号/换行触发包裹，冒号不转义）与四个工具的字段顺序；`ual_common/toon.py` 是唯一编解码实现，`test_toon_roundtrip_with_escaping` 覆盖含逗号与引号的值。跨版本升级仍需同步生成端与消费端。
+TOON 不是社区标准。`Server/schema/PROTOCOL.md` 已定义语法、转义（逗号/双引号/换行触发包裹，冒号不转义）与十个工具的字段顺序；`ual_common/toon.py` 是唯一编解码实现，`test_toon_roundtrip_with_escaping` 覆盖含逗号与引号的值。跨版本升级仍需同步生成端与消费端。
 
 ## 5. FTS 索引是快照
 
@@ -61,29 +62,23 @@ DuckDB FTS 不随 `INSERT` 自动更新。`ual-cli build` 每次灌库后调用 
 
 ## 10. 白名单机制尚未实现
 
-`docs/ci-gates.md` §4 给出了白名单文件约定，但当前 CLI 只做到「报告 + 非零退出」，没有读取白名单、没有过期校验、没有 code review 集成。落地前请勿依赖该机制绕过门禁。
+`docs/ci-gates.md` §5 给出了白名单文件约定，但当前 CLI 只做到「报告 + 非零退出」，没有读取白名单、没有过期校验、没有 code review 集成。落地前请勿依赖该机制绕过门禁。
 
 ---
 
-## 11. 引擎内 MCP 编译已验证，运行时联调未闭环
+## 11. 引擎内 MCP 编译与运行时联调均已闭环
 
-**现象**：`Source/UEAssetLensMCP/` 按 UE6 源码树里 `ModelContextProtocol` 插件的公开头文件编写，**C++ 模块已实机编译通过**；尚未完成编辑器内的端到端联调（启动编辑器 → `tools/list` 出现 4 个工具 → 调用返回 TOON/YAML）。
+**现状（2026-11-24）**：宿主工程 `Ann` 的 `*.Target.cs` 已适配 UE6，`AnnEditor Win64 Development` 全量编译 **4450 actions / `Result: Succeeded`**，此后多次增量编译均通过。`Source/UEAssetLensMCP/` 已按官方 `ModelContextProtocol` 头文件实机编译并链接；headless editor 端到端联调已闭环（`tools/list` 出现全部限定名工具 → `tools/call` 返回真实 TOON / YAML）。bridge 走引擎内嵌 Python 与 UE 官方 `PythonRequirements`。本节早期记录的 UE5.5 Target 规则、隔离工程绕行与"运行时未联调"均已失效，保留为历史背景。
 
-本地尝试过三次 UBT 编译，前两次失败原因都**不在本次新增代码**：
+**仍存在的环境抖动**：本机 UE6 源码树的 `Engine/Binaries` 混有不同 BuildId 的 DLL，`-run=` commandlet 启动时偶发
+`Plugin 'DatasmithContent' / 'OnlineServices' failed to load`（模块被判为 out-of-date 而跳过），随后 `EngineExit()`。
+这与 UAL 代码无关。`ual-cli build` 固定使用已验证的参数集：
+`-nullrhi -Unattended -NoSplash -NoSound -stdout -FullStdOutLogOutput -run=UEAssetLensEditor.UALIndexBuilder -Out=index`；
+`-run=` 必须用 `Module.Class` 限定名（UE6 在 `PostEngineInit` 之前解析 commandlet，而 `UEAssetLensEditor` 是
+`PostEngineInit` 加载的 Editor 模块）。若仍失败，重跑一次或先做一次引擎全量编译即可恢复。
 
-| 尝试 | 阻塞 |
-| --- | --- |
-| `AnnEditor Win64 Development -Project=Ann.uproject` | `Ann.Target.cs` / `AnnEditor.Target.cs` 等 4 个文件引用 `EngineIncludeOrderVersion.Unreal5_5`，UE6 已移除该枚举 → `Failed (RulesError)` |
-| 临时工程 + `AdditionalPluginDirectories=Ann/Plugins` | 扫描到 `ThirdParty/UnLua`，其 `Lua.Build.cs` 触发 CMake，`cmake_minimum_required` 版本过旧 → `Failed (RulesError)` |
-| 仅含 UAL 的隔离工程 + `-Module=UEAssetLensMCP` | **成功**：`Result: Succeeded`，编译并链接出 `UnrealEditor-UEAssetLensMCP.dll`；首轮有 7 条 `UE_LOG` 弃用警告，改用 UE6 的 `UE_LOGF` + `%ls` 后复编译**零警告** |
-
-隔离工程用 `tar` 复制插件源码、只放 UAL 一个插件，绕开了 `Ann` 的 Target 规则与 `ThirdParty/UnLua` 的 CMake 问题。编译产物落在隔离工程的 `Binaries/`，未污染引擎目录。
-
-但这也说明一个独立事实：**宿主工程 `Ann` 自身仍带 UE5.5 时代的 Target 规则**，`Intermediate/Build` 缓存的 `EngineVersion 5.6.0` 与源码树 `UE6` 不一致。在 `Ann` 完成 UE6 适配前，官方 Unreal MCP 能否在该工程启用需要用户确认。
-
-**当前缓解**：`engine_bridge.py --self-test`、pytest、CLI 自检、文档漂移门禁与严格站点构建都不依赖 UE SDK，可独立验证 Python 侧全链路；C++ 侧保持最小 API 面（`AddTool` / `OnRefreshTools` / `MakeTextResult`），并把 `ModelContextProtocol` 声明为 `Optional` 插件依赖——插件未启用时模块不注册工具，不影响 UAL 其余功能。
-
-**待办**：① 让 `Ann` 的 `*.Target.cs` 适配 UE6 后编译整个 `AnnEditor` target；② 在编辑器里确认 `ModelContextProtocol` 已启用；③ 用 MCP Inspector 对 `http://127.0.0.1:8000/mcp` 做 `tools/list` 与 4 次 `tools/call`。
+**降级路径不变**：`engine_bridge.py --self-test`、pytest、CLI 自检与文档漂移门禁都不依赖 UE SDK；
+`ModelContextProtocol` 声明为 `Optional` 插件依赖，插件未启用时模块只打一条 Warning，不影响 UAL 其余功能。
 
 ## 12. 引擎内工具每次调用启动一个 Python 进程
 
@@ -101,7 +96,7 @@ DuckDB FTS 不随 `INSERT` 自动更新。`ual-cli build` 每次灌库后调用 
 
 **决策依据**：手写实现缺少 resources / prompts / 分页 / 协议版本协商，而官方 SDK v2 已能同时服务 2025 与 2026 两代协议修订；维护第三套协议语义的收益低于风险。工具名、描述与 `inputSchema` 的唯一事实源已迁至 `tools.py::TOOL_DEFS`，由 `gen_docs.py` 生成 `tool_schemas.yaml` 供 C++ 引擎内工具使用，并校验与 `server.py` 注册函数一致。
 
-**当前缓解**：无 SDK 的离线/CI 场景本来就走 `ual-cli`（`build` / `lint-duplicates` / `verify-references` / `export-parquet`），不依赖 MCP；`ual_mcp/server.py --self-test` 也不导入 SDK，可在纯 DuckDB 环境验证 4 个工具的输出。
+**当前缓解**：无 SDK 的离线/CI 场景本来就走 `ual-cli`（`build` / `lint-duplicates` / `lint-policy` / `verify-references` / `export-parquet`），不依赖 MCP；`ual_mcp/server.py --self-test` 也不导入 SDK，可在纯 DuckDB 环境验证 10 个工具的输出。
 
 ## 14. 全类型覆盖的实际边界（2026-11-16）
 
@@ -122,12 +117,19 @@ DuckDB FTS 不随 `INSERT` 自动更新。`ual-cli build` 每次灌库后调用 
 3. **C++ 改动未在 CI 编译**：`Ann` 的 `*.Target.cs` 仍引用 UE6 已移除的 `EngineIncludeOrderVersion.Unreal5_5`（见 §11），无法整体验证 `AnnEditor` target。生成头、扫描根与插件挂载 API 均按 UE6 源码树静态核对，但需本地 UE6 SDK 实机编译确认。
 4. **现有 `.ual/index.duckdb` 仍是 9 条种子数据／6 种类型**，不是真实工程索引；要得到全量结果需先用新参数重跑 Commandlet 并灌库。
 
+## 15. `custom` 策略规则需要进程内 `ExtensionRegistry`（2026-11-26）
+
+`ual-cli lint-policy` 只解析四级 YAML 偏好，不装载 `<Project>/Config/UAL/extensions/*.yaml` 扩展清单，
+因此 `kind: custom` 的规则在 CLI 中会返回 `custom rule requires an ExtensionRegistry: <name>` 违规，
+而不会执行自定义谓词。单元测试通过 `register_callable()` 直接构造注册表，验证了自定义谓词的分派路径。
+落地扩展清单装载前，团队规范应使用 `naming` / `directory` / `format` / `reference` 四类声明式规则。
+
 ## 边界之外：当前可用且已验证的部分
 
 以下能力在 **2026-11-16** 已通过 `pytest`（44 项，含 `test_type_coverage.py` 的 27 类分类与灌库回归）、`ual_cli self-test` 端到端验证：
 
 - DuckDB DDL 幂等执行、9 条资产 / 5 条边灌库、FTS 重建与 BM25 召回；
 - 硬约束过滤（`duration` / `forward_cm` / `dominant_limb` / `domain_scope`）；
-- 4 个 MCP 工具的 TOON / YAML 输出与字段顺序；
+- 10 个 MCP 工具的 TOON / YAML 输出与字段顺序；
 - 余弦自连接查重（非零退出）、引用校验（非零退出）、Parquet 导出；
 - TOON 转义往返、YAML 确定性输出、16 维指纹数学（旋转不变性、零向量、NaN 防护）。

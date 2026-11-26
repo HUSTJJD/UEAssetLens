@@ -1,6 +1,6 @@
 # CI 门禁（M4）
 
-UAL 把两类资产质量问题变成 CI 中的强制约束：重复资产、断裂引用。两个门禁都是「发现问题即非零退出」。当前通过 `python Server/ual_cli/ual_cli.py <command>` 调用；仓库未提供 `ual-cli` console script 入口。
+UAL 把三类资产质量问题变成 CI 中的约束：重复资产、断裂引用、规范违背。前两个门禁「发现问题即非零退出」；`lint-policy` 默认只报告，需 `enforce: true` 或 `--strict` 才阻断。当前通过 `python Server/ual_cli/ual_cli.py <command>` 调用；仓库未提供 `ual-cli` console script 入口。
 
 ## 1. `lint-duplicates`：重复资产门禁
 
@@ -60,7 +60,50 @@ python Server/ual_cli/ual_cli.py verify-references --scan-dirs Content/Abilities
 
 > 这是**静态启发式**校验，不是 UE 反射级语义解析。它的价值是拦截 AI 编造的资产路径与参数名，不能替代编辑器内的引用完整性检查。
 
-## 3. 接入示例
+## 3. `lint-policy`：声明式规范门禁
+
+`lint-policy` 把 `ual_common.policy.PolicyEngine` 接到 CI：只读打开 `.ual/index.duckdb`，把 `assets` 的
+`asset_path` / `logical_id` / `asset_class` / `domain_spec` / `interface_spec` 与 `DEPENDS_ON` 边投影成策略输入，
+输出有界 TOON 报告（`violations` 表 + `summary`）。`CO_OCCURS` 是名称相似度提示，不参与引用规则。
+
+规则来自四级偏好解析（`Server/ual_common/settings.py`），按 `id` 合并、后层覆盖前层并保持首次出现顺序：
+
+| 层 | 路径 | 用途 |
+| --- | --- | --- |
+| builtin | `<Plugin>/Config/UAL/policies/` | 随插件发布的默认规则（`enforce: false`，只报告） |
+| plugin | `<Project>/Plugins/*/Config/UAL/policies/` | 扩展插件默认值 |
+| project | `<Project>/Config/UAL/policies/` | 团队规范，入 Git |
+| user | `<Project>/Saved/Config/UAL/policies/` | 个人覆盖，不入库 |
+
+```bash
+python Server/ual_cli/ual_cli.py lint-policy --project /path/to/Ann
+python Server/ual_cli/ual_cli.py lint-policy --project /path/to/Ann --strict --fail-on warning
+```
+
+| 参数 | 作用 |
+| --- | --- |
+| `--project` | 指定 UE 工程根，启用 project / user 两层；省略时从 cwd 向上找 `*.uproject` |
+| `--namespace` | 偏好命名空间，默认 `policies` |
+| `--limit` | TOON 报告最多输出多少行违规（1–500），全量结果仍由 `validate_many()` 计算 |
+| `--fail-on` | 可阻断的最低严重度：`info` < `warning` < `error` |
+| `--strict` | 放宽 `enforce` 要求：仅按严重度阻断 |
+
+### 退出码
+
+| 情况 | 退出码 |
+| --- | --- |
+| 无违规，或只有报告型违规且未启用 `--strict` | 0 |
+| `enforce: true` 且严重度达到 `--fail-on`，或 `--strict` 下达到阈值 | **1** |
+| 索引缺失 | 2 |
+
+stdout 始终只有 TOON 报告，便于管道消费；`PASS` / `BLOCKED` 状态写 stderr。`ual-cli self-test`
+会在隔离的临时工程根上跑两遍：默认模式只报告（0），`--strict --fail-on warning` 命中内置命名规则（1），
+因此退出码语义与四级偏好一起被离线自检覆盖。
+
+> `custom` 类规则需要进程内 `ExtensionRegistry`；CLI 目前不装载 YAML 扩展清单，命中时会报告
+> `custom rule requires an ExtensionRegistry`，见 `docs/known-limitations.md` §15。
+
+## 4. 接入示例
 
 ### GitHub Actions（片段）
 
@@ -87,6 +130,8 @@ jobs:
         run: python Server/ual_cli/ual_cli.py lint-duplicates --threshold 0.85
       - name: Gate 2 - reference integrity
         run: python Server/ual_cli/ual_cli.py verify-references --scan-dirs Content/Abilities,Content/Script
+      - name: Gate 3 - declarative asset policy
+        run: python Server/ual_cli/ual_cli.py lint-policy --project . --strict --fail-on error
 ```
 
 > 有 UE SDK 的自托管 runner 可用 `build --project <root> --engine-cmd <UnrealEditor-Cmd.exe>` 走真实 Commandlet。本仓库是 `Ann/Plugins/UEAssetLens` 下的独立 git 仓库，路径需按 CI 检出布局调整。
@@ -107,9 +152,14 @@ repos:
         entry: python Server/ual_cli/ual_cli.py verify-references --scan-dirs Content/Abilities,Content/Script
         language: system
         pass_filenames: false
+      - id: ual-lint-policy
+        name: UAL declarative policy gate
+        entry: python Server/ual_cli/ual_cli.py lint-policy --project . --strict --fail-on error
+        language: system
+        pass_filenames: false
 ```
 
-## 4. 误报处理与白名单约定
+## 5. 误报处理与白名单约定
 
 常见误报：同网格的合法材质/LOD 变体、跨骨架 retarget、运行期动态参数、阈值边界抖动、指纹方向余弦主导导致的假阳性（见 [架构说明](architecture.md) §3）。
 

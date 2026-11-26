@@ -4,9 +4,10 @@
 Commands:
   build             Seed/update .ual/index.duckdb from UE Commandlet YAML doc-stream.
   lint-duplicates   Cosine self-join duplicate gate (non-zero exit blocks the commit).
+  lint-policy       Declarative naming/directory/format/reference gate (four-layer UAL prefs).
   verify-references Validate asset paths / skeletons / material params in configs & scripts.
   export-parquet    COPY ... TO Parquet for cross-project catalog sharing.
-  self-test         Offline end-to-end check of all four gates.
+  self-test         Offline end-to-end check of build, all gates and export.
 """
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ REPO_ROOT = SERVER_ROOT.parents[0]
 if str(SERVER_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVER_ROOT))
 
-from ual_common import db  # noqa: E402
+from ual_common import db, policy_gate  # noqa: E402
 from ual_common.toon import Table, render_toon  # noqa: E402
 
 SEED = SERVER_ROOT / "tests" / "seed.yaml"
@@ -51,25 +52,45 @@ def _run_ue_commandlet(args: argparse.Namespace) -> list[Path]:
     if not engine:
         raise SystemExit(
             "ual-cli: no --engine-cmd given and UE_EDITOR_CMD is unset.\n"
-            "Either pass --from-yaml / --demo, or provide UnrealEditor-Cmd.exe, e.g.\n"
-            "  ual-cli build --project Ann --engine-cmd C:/UE/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
+            "Either pass --from-yaml / --demo, or provide UnrealEditor.exe, e.g.\n"
+            "  ual-cli build --project Ann --engine-cmd C:/UE/Engine/Binaries/Win64/UnrealEditor.exe"
         )
     project = Path(args.project or ".").resolve()
     uproject = project / (project.name + ".uproject")
     staging = project / ".ual" / "staging"
     staging.mkdir(parents=True, exist_ok=True)
+    # UE6 resolves -run= before PostEngineInit loads Editor modules. The
+    # Module.Class form makes LaunchEngineLoop load UEAssetLensEditor first
+    # (LaunchEngineLoop.cpp:4220-4225); a bare class name fails with
+    # "could not find the class UALIndexBuilderCommandlet".
     cmd = [
-        engine, str(uproject), "-run=UALIndexBuilder",
-        f"-Project={project.name}", f"-Out=.ual/staging",
-        "-unattended", "-nosplash",
+        engine, str(uproject),
+        "-nullrhi", "-Unattended", "-NoSplash", "-NoSound",
+        "-stdout", "-FullStdOutLogOutput",
+        "-run=UEAssetLensEditor.UALIndexBuilder",
+        "-Out=index",
     ]
     if args.incremental:
         cmd.append("-Incremental")
     print(f"ual-cli: {' '.join(cmd)}")
     completed = subprocess.run(cmd, cwd=str(project), capture_output=True, text=True)
+    sources = sorted(staging.glob("*.yaml"))
+    # UE6 commandlets can report "finished execution (result 0)" and still make
+    # the engine process exit non-zero (shutdown-time load errors). The staging
+    # document stream is the real contract, so gate on the produced files.
+    if not sources:
+        detail = (completed.stderr or completed.stdout or "")[-2000:]
+        raise SystemExit(
+            f"ual-cli: Commandlet produced no staging YAML (exit={completed.returncode}).\n"
+            f"{detail}"
+        )
     if completed.returncode != 0:
-        raise SystemExit(f"ual-cli: Commandlet failed ({completed.returncode}):\n{completed.stderr[-2000:]}")
-    return sorted(staging.glob("*.yaml"))
+        print(
+            f"ual-cli: warning: commandlet exit={completed.returncode} but "
+            f"{len(sources)} staging YAML file(s) produced; continuing.",
+            file=sys.stderr,
+        )
+    return sources
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -164,6 +185,38 @@ def cmd_lint_duplicates(args: argparse.Namespace) -> int:
         return 1
     print(f"ual-cli: PASS - no duplicate pair >= {args.threshold}")
     return 0
+
+
+# --------------------------------------------------------------------------- lint-policy
+
+def cmd_lint_policy(args: argparse.Namespace) -> int:
+    con = _open(args.index)
+    try:
+        report, violations, resolved = policy_gate.run_policy_gate(
+            con,
+            project_root=Path(args.project).resolve() if args.project else None,
+            namespace=args.namespace,
+            limit=args.limit,
+        )
+    finally:
+        con.close()
+    print(report, end="")
+    rc = policy_gate.decide_exit_code(
+        violations, fail_on=args.fail_on, strict=args.strict
+    )
+    if rc:
+        print(
+            f"ual-cli: BLOCKED - {len(violations)} policy finding(s) "
+            f"(fail_on={args.fail_on}, strict={str(args.strict).lower()})",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"ual-cli: PASS - {len(violations)} finding(s), "
+            f"{len(resolved.active_rules())} active rule(s)",
+            file=sys.stderr,
+        )
+    return rc
 
 
 # --------------------------------------------------------------------------- verify-references
@@ -274,6 +327,17 @@ def cmd_self_test(args: argparse.Namespace) -> int:
     parquet_out.unlink(missing_ok=True)
     cmd_export_parquet(argparse.Namespace(index=str(tmp), out=str(parquet_out)))
 
+    # Policy gate: an isolated project root keeps the four-layer resolver on
+    # builtin rules only, so self-test never picks up a developer's user layer.
+    policy_root = Path(tempfile.gettempdir()) / "ual_cli_policy_root"
+    policy_root.mkdir(exist_ok=True)
+    policy_base = dict(index=str(tmp), project=str(policy_root),
+                       namespace="policies", limit=20)
+    policy_report = cmd_lint_policy(argparse.Namespace(
+        **policy_base, fail_on="error", strict=False))
+    policy_strict = cmd_lint_policy(argparse.Namespace(
+        **policy_base, fail_on="warning", strict=True))
+
     sandbox = Path(tempfile.gettempdir()) / "ual_cli_scan"
     sandbox.mkdir(exist_ok=True)
     (sandbox / "ability.yaml").write_text(
@@ -292,6 +356,8 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         "lint_duplicates_blocks": dup == 1,
         "verify_references_blocks": verify == 1,
         "parquet_written": parquet_out.exists() and parquet_out.stat().st_size > 0,
+        "lint_policy_reports_only": policy_report == 0,
+        "lint_policy_strict_blocks": policy_strict == 1,
     }
     print("\n===== self-test =====")
     for key, passed in checks.items():
@@ -320,6 +386,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--threshold", type=float, default=0.85)
     p.add_argument("--diff-only", action="store_true", help="Only assets added in this Git change")
     p.set_defaults(func=cmd_lint_duplicates)
+
+    p = sub.add_parser("lint-policy", help="Declarative asset policy gate (four-layer UAL preferences)")
+    p.add_argument("--project", default=None, help="UE project root for team/user preference layers")
+    p.add_argument("--namespace", default="policies", help="UAL preference namespace to load")
+    p.add_argument("--limit", type=int, default=100, help="Max violation rows in the TOON report")
+    p.add_argument("--fail-on", default="error", choices=["info", "warning", "error"],
+                   help="Minimum severity that can block")
+    p.add_argument("--strict", action="store_true",
+                   help="Block on severity alone; rules are report-only by default")
+    p.set_defaults(func=cmd_lint_policy)
 
     p = sub.add_parser("verify-references", help="Validate asset references in configs/scripts")
     p.add_argument("--scan-dirs", default="Content/Abilities,Content/Script")

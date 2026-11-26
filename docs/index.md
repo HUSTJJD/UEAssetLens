@@ -19,7 +19,7 @@ flowchart TB
         TOON["L3 TOON<br/>批量召回 · 省 40%~60% Token"]
     end
     subgraph MCP["MCP Server (stdio)"]
-        TOOLS["4 个工具"]
+        TOOLS["10 个工具<br/>语义 6 + 图谱 4"]
     end
     AGENT["AI Agent<br/>Claude Code · Cursor"]
     CLI["ual-cli<br/>build / lint / verify / export"]
@@ -134,15 +134,15 @@ python -m mkdocs build --strict --site-dir _site
 
 ## 引擎内官方 MCP（UE6）
 
-UAL 也把同一批 4 个工具通过 `IModelContextProtocolModule::AddTool` 注册进 Epic 第一方 Unreal MCP server，形成「编辑器内 HTTP + 离线 stdio/CLI」双通道，共用一份 `.ual/index.duckdb`。选择 `AddTool` 而非 `UToolsetDefinition` 的理由、调用链与边界见[架构说明](architecture.md)。
+UAL 也把同一批 10 个工具通过 `IModelContextProtocolModule::AddTool` 注册进 Epic 第一方 Unreal MCP server，形成「编辑器内 HTTP + 离线 stdio/CLI」双通道，共用一份 `.ual/index.duckdb`。选择 `AddTool` 而非 `UToolsetDefinition` 的理由、调用链与边界见[架构说明](architecture.md)。
 
 ## 导航
 
 - [架构说明](architecture.md)：采集层、DuckDB 表结构、16 维指纹与误报边界、零 VLM 红线
-- [CI 门禁](ci-gates.md)：`lint-duplicates` / `verify-references` 接入与白名单约定
+- [CI 门禁](ci-gates.md)：`lint-duplicates` / `lint-policy` / `verify-references` 接入与白名单约定
 - [已知限制](known-limitations.md)：当前实现边界与尚未验证的性能目标
 - [三层数据协议](reference/protocol.md)：DuckDB / YAML / TOON 唯一契约（自动生成）
 - [DuckDB 存储参考](reference/schema.md)：DDL 结构化投影（自动生成）
-- [MCP 工具参考](reference/mcp-tools.md)：4 个工具入参与 TOON 字段顺序（自动生成）
+- [MCP 工具参考](reference/mcp-tools.md)：10 个工具入参与 TOON 字段顺序（自动生成）
 - [ual-cli 命令参考](reference/cli.md)：命令、参数与退出码（自动生成）
 - [开发规范](agent-guide.md)：AI 代理自检清单与文档约定（自动生成）

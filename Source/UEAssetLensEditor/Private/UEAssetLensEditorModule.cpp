@@ -2,6 +2,7 @@
 
 #include "UALExtractorRegistry.h"
 #include "FUniversalReflectionExtractor.h"
+#include "UALTypedFeatureExtractor.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
 
@@ -11,11 +12,13 @@ void FUEAssetLensEditorModule::StartupModule()
 {
 	UE_LOG(LogUALEditor, Log, TEXT("UEAssetLensEditor module startup."));
 
-	// 注册通用兜底提取器；领域提取器（Priority 100）可由其它模块继续 Register。
+	// 通用兜底（Priority 0）+ 全资产特征规范化器（Priority 100）。
+	// 单一 AssetClass 专属提取器可继续以 Priority 100 Register 注入。
 	EditorRegistry = MakeShared<FUALExtractorRegistry>();
 	EditorRegistry->Register(MakeShared<FUniversalReflectionExtractor>());
+	EditorRegistry->Register(MakeShared<FUALTypedFeatureExtractor>());
 	UE_LOG(LogUALEditor, Log,
-		TEXT("Registered %d extractor(s); universal fallback (Priority 0) ready."),
+		TEXT("Registered %d extractor(s); universal fallback (Priority 0) + typed features (Priority 100) ready."),
 		EditorRegistry->Num());
 
 	RegisterAssetRegistryCallbacks();

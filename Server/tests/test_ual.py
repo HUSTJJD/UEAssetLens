@@ -160,7 +160,7 @@ def test_cli_gates_return_expected_exit_codes(index, tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
-def test_engine_bridge_dispatches_all_four_tools(ro):
+def test_engine_bridge_dispatches_all_tools(ro):
     from ual_mcp import engine_bridge
 
     cases = [
@@ -168,12 +168,46 @@ def test_engine_bridge_dispatches_all_four_tools(ro):
         ("UEAssetLens.AssetSemanticToolset.InspectAsset", {"key": "AnimMontage:AM_Knight_HeavySlash_02"}),
         ("UEAssetLens.AssetSemanticToolset.GetCooccurringBundle", {"asset_path": HERO, "top_k": 2}),
         ("UEAssetLens.AssetSemanticToolset.FindSimilarAssets", {"asset_path": HERO, "threshold": 0.95}),
+        ("UEAssetLens.AssetGraphToolset.GetDependencies", {"asset_path": HERO, "max_depth": 3}),
+        ("UEAssetLens.AssetGraphToolset.GetReferencers", {"asset_path": HERO, "max_depth": 3}),
+        ("UEAssetLens.AssetGraphToolset.GetIndexHealth", {"top_n": 3}),
+        ("UEAssetLens.AssetGraphToolset.FindDuplicates", {"threshold": 0.95, "limit": 5}),
+        ("UEAssetLens.AssetSemanticToolset.SearchByFeatures", {"feature_key": "feature.family"}),
+        ("UEAssetLens.AssetSemanticToolset.ListFeatureKeys", {"limit": 10}),
     ]
+    assert len(cases) == len(tools.TOOL_NAMES)
     for name, arguments in cases:
         text = engine_bridge.dispatch(ro, name, arguments)
         assert text.startswith("# UEAssetLens"), name
     with pytest.raises(KeyError):
         engine_bridge.dispatch(ro, "ual_not_a_tool", {})
+
+
+def test_graph_and_feature_tools_obey_protocol(ro):
+    deps = parse_toon(tools.ual_get_dependencies(ro, HERO, 3))
+    assert list(deps["tables"]) == ["dependencies"]
+    assert list(deps["tables"]["dependencies"][0]) == tools.DEPENDENCY_FIELDS
+    assert deps["tables"]["dependencies"][0]["edge_type"] == "DEPENDS_ON"
+
+    refs = parse_toon(tools.ual_get_referencers(ro, HERO, 3))
+    assert list(refs["tables"]) == ["referencers"]
+    assert list(refs["tables"]["referencers"][0]) == tools.DEPENDENCY_FIELDS
+
+    health = parse_toon(tools.ual_get_index_health(ro, 3))
+    assert list(health["tables"]) == ["metrics", "hotspots", "families"]
+    assert any(row["metric"] == "broken_references" for row in health["tables"]["metrics"])
+
+    dup = parse_toon(tools.ual_find_duplicates(ro, 0.95, 5))
+    assert len(dup["tables"]["duplicate_pairs"]) >= 1
+    assert list(dup["tables"]["duplicate_pairs"][0]) == tools.DUPLICATE_FIELDS
+
+    feats = parse_toon(tools.ual_search_by_features(ro, feature_key="feature.family"))
+    assert len(feats["tables"]["features"]) == 9  # one row per seeded asset
+    assert list(feats["tables"]["features"][0]) == tools.FEATURE_FIELDS
+
+    catalog = parse_toon(tools.ual_list_feature_keys(ro, 20))
+    assert len(catalog["tables"]["feature_keys"]) == 10
+    assert all(k["feature_key"].startswith("feature.") for k in catalog["tables"]["feature_keys"])
 
 
 def test_tool_schemas_contract_matches_python_server():

@@ -1,6 +1,8 @@
-"""The four UAL MCP tools. Pure string-returning functions, no MCP SDK dependency.
+"""UAL MCP tools. Pure string-returning functions, no MCP SDK dependency.
 
 Batch tools -> TOON. Single-asset tool -> YAML. Never return a dict to the model.
+Two toolset families: AssetSemanticToolset (retrieval/features) and
+AssetGraphToolset (dependency graph / index health). All tools are read-only.
 """
 from __future__ import annotations
 
@@ -15,6 +17,13 @@ from ual_common.yamlspec import HEADER as YAML_HEADER, build_yaml
 CANDIDATE_FIELDS = ["logical_id", "duration", "forward_cm", "strike_window", "limb", "score"]
 BUNDLE_FIELDS = ["logical_id", "asset_class", "weight", "hint"]
 SIMILAR_FIELDS = ["logical_id", "asset_class", "similarity", "shared_class"]
+DEPENDENCY_FIELDS = ["logical_id", "asset_path", "depth", "edge_type", "weight", "via_path"]
+HEALTH_FIELDS = ["metric", "value", "detail"]
+HOTSPOT_FIELDS = ["logical_id", "asset_class", "referenced_by"]
+FAMILY_FIELDS = ["family", "asset_count"]
+DUPLICATE_FIELDS = ["lhs_id", "rhs_id", "similarity"]
+FEATURE_FIELDS = ["logical_id", "asset_class", "feature_key", "feature_value"]
+FEATURE_KEY_FIELDS = ["feature_key", "spec_source", "asset_count"]
 
 # The single source of truth: `name` is the Python implementation name,
 # `mcp_name` is the externally visible MCP tool name (official qualified form).
@@ -71,6 +80,81 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "threshold": {"type": "number", "default": 0.85},
             },
             "required": ["asset_path"],
+        },
+    },
+    {
+        "name": "ual_get_dependencies",
+        "mcp_name": "UEAssetLens.AssetGraphToolset.GetDependencies",
+        "description": "Bounded multi-hop dependency walk (what this asset references); returns TOON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string", "description": "Source package path, e.g. /Game/Characters/Knight/AM_Knight_HeavySlash_02"},
+                "max_depth": {"type": "integer", "default": 2, "description": "BFS depth, 1..6"},
+                "edge_type": {"type": "string", "default": "DEPENDS_ON", "description": "DEPENDS_ON | CO_OCCURS | ANY"},
+                "limit": {"type": "integer", "default": 50},
+            },
+            "required": ["asset_path"],
+        },
+    },
+    {
+        "name": "ual_get_referencers",
+        "mcp_name": "UEAssetLens.AssetGraphToolset.GetReferencers",
+        "description": "Reverse impact surface: who references this asset, transitively; returns TOON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "max_depth": {"type": "integer", "default": 2},
+                "edge_type": {"type": "string", "default": "DEPENDS_ON", "description": "DEPENDS_ON | CO_OCCURS | ANY"},
+                "limit": {"type": "integer", "default": 50},
+            },
+            "required": ["asset_path"],
+        },
+    },
+    {
+        "name": "ual_get_index_health",
+        "mcp_name": "UEAssetLens.AssetGraphToolset.GetIndexHealth",
+        "description": "Index quality report: edge counts, broken/orphan/external references, hotspots and family distribution; returns TOON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"top_n": {"type": "integer", "default": 5}},
+        },
+    },
+    {
+        "name": "ual_find_duplicates",
+        "mcp_name": "UEAssetLens.AssetGraphToolset.FindDuplicates",
+        "description": "Whole-index 16-dim fingerprint duplicate pairs (use InspectAsset to confirm); returns TOON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "threshold": {"type": "number", "default": 0.95},
+                "limit": {"type": "integer", "default": 20},
+            },
+        },
+    },
+    {
+        "name": "ual_search_by_features",
+        "mcp_name": "UEAssetLens.AssetSemanticToolset.SearchByFeatures",
+        "description": "Retrieve assets by normalized feature.* keys emitted by the typed extractor; returns TOON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "feature_key": {"type": "string", "description": "Key substring, e.g. feature.mesh or kinematics; omit to list all feature.* keys"},
+                "value_contains": {"type": "string", "description": "Optional case-insensitive value substring"},
+                "asset_class": {"type": "string"},
+                "family": {"type": "string", "description": "taxonomy family, e.g. Animation"},
+                "limit": {"type": "integer", "default": 20},
+            },
+        },
+    },
+    {
+        "name": "ual_list_feature_keys",
+        "mcp_name": "UEAssetLens.AssetSemanticToolset.ListFeatureKeys",
+        "description": "Catalog of feature.* keys present in the index with asset counts; returns TOON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"limit": {"type": "integer", "default": 50}},
         },
     },
 ]
@@ -165,6 +249,133 @@ def ual_find_similar_assets(
     return render_toon(
         [Table("similar_assets", SIMILAR_FIELDS, table_rows)],
         summary={"asset_path": asset_path, "threshold": threshold, "matched_total": len(rows)},
+    )
+
+
+def _dependency_rows(rows: list[dict[str, Any]]) -> list[list[Any]]:
+    return [[
+        r["logical_id"], r["asset_path"], int(r["depth"]), r["edge_type"],
+        round(float(r["weight"]), 4), r["via_path"],
+    ] for r in rows]
+
+
+def ual_get_dependencies(
+    con: duckdb.DuckDBPyConnection,
+    asset_path: str,
+    max_depth: int = 2,
+    edge_type: str = "DEPENDS_ON",
+    limit: int = 50,
+) -> str:
+    """Bounded downstream BFS over the reference graph -> TOON."""
+    rows = db.graph_traverse(
+        con, asset_path, direction="out", edge_type=edge_type,
+        max_depth=max_depth, limit=limit,
+    )
+    return render_toon(
+        [Table("dependencies", DEPENDENCY_FIELDS, _dependency_rows(rows))],
+        summary={
+            "asset_path": asset_path, "direction": "out",
+            "max_depth": max_depth, "edge_type": edge_type,
+            "matched_total": len(rows),
+        },
+    )
+
+
+def ual_get_referencers(
+    con: duckdb.DuckDBPyConnection,
+    asset_path: str,
+    max_depth: int = 2,
+    edge_type: str = "DEPENDS_ON",
+    limit: int = 50,
+) -> str:
+    """Reverse (impact surface) BFS over the reference graph -> TOON."""
+    rows = db.graph_traverse(
+        con, asset_path, direction="in", edge_type=edge_type,
+        max_depth=max_depth, limit=limit,
+    )
+    return render_toon(
+        [Table("referencers", DEPENDENCY_FIELDS, _dependency_rows(rows))],
+        summary={
+            "asset_path": asset_path, "direction": "in",
+            "max_depth": max_depth, "edge_type": edge_type,
+            "matched_total": len(rows),
+        },
+    )
+
+
+def ual_get_index_health(con: duckdb.DuckDBPyConnection, top_n: int = 5) -> str:
+    """Deterministic index quality report -> TOON (never a full database dump)."""
+    report = db.index_health(con, top_n)
+    metrics = [[m["metric"], m["value"], m["detail"]] for m in report["metrics"]]
+    hotspots = [[
+        r["logical_id"], r["asset_class"], int(r["referenced_by"]),
+    ] for r in report["hotspots"]]
+    families = [[r["family"], int(r["asset_count"])] for r in report["families"]]
+    return render_toon(
+        [Table("metrics", HEALTH_FIELDS, metrics),
+         Table("hotspots", HOTSPOT_FIELDS, hotspots),
+         Table("families", FAMILY_FIELDS, families)],
+        summary={"top_n": top_n, "metrics_total": len(metrics)},
+    )
+
+
+def ual_find_duplicates(
+    con: duckdb.DuckDBPyConnection,
+    threshold: float = 0.95,
+    limit: int = 20,
+) -> str:
+    """Whole-index fingerprint duplicate pairs -> TOON."""
+    threshold = float(threshold)
+    limit = max(1, min(int(limit or 20), 200))
+    rows = db.duplicate_pairs(con, threshold)[:limit]
+    table_rows = [[
+        r["lhs_id"], r["rhs_id"], round(float(r["similarity"]), 4),
+    ] for r in rows]
+    return render_toon(
+        [Table("duplicate_pairs", DUPLICATE_FIELDS, table_rows)],
+        summary={
+            "threshold": threshold, "matched_total": len(rows),
+            "note": "fingerprint similarity is recall-oriented; confirm with InspectAsset",
+        },
+    )
+
+
+def ual_search_by_features(
+    con: duckdb.DuckDBPyConnection,
+    feature_key: str | None = None,
+    value_contains: str | None = None,
+    asset_class: str | None = None,
+    family: str | None = None,
+    limit: int = 20,
+) -> str:
+    """Query normalized typed-extractor features without dumping whole assets."""
+    rows = db.search_by_features(
+        con, feature_key=feature_key, value_contains=value_contains,
+        asset_class=asset_class, family=family, limit=limit,
+    )
+    table_rows = [[
+        r["logical_id"], r["asset_class"], r["feature_key"], r["feature_value"],
+    ] for r in rows]
+    return render_toon(
+        [Table("features", FEATURE_FIELDS, table_rows)],
+        summary={
+            "feature_key": feature_key or "feature.*",
+            "value_contains": value_contains or "",
+            "asset_class": asset_class or "", "family": family or "",
+            "matched_total": len(rows),
+        },
+    )
+
+
+def ual_list_feature_keys(con: duckdb.DuckDBPyConnection, limit: int = 50) -> str:
+    """Discover the feature vocabulary actually present in this index -> TOON."""
+    rows = db.feature_key_catalog(con, limit)
+    table_rows = [[
+        r["feature_key"], r["spec_source"], int(r["asset_count"]),
+    ] for r in rows]
+    return render_toon(
+        [Table("feature_keys", FEATURE_KEY_FIELDS, table_rows)],
+        summary={"matched_total": len(rows), "limit": limit},
     )
 
 

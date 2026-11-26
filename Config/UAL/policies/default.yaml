@@ -1,0 +1,95 @@
+# Builtin policy defaults. These are a baseline, NOT a mandate.
+# Override per layer (see docs/asset-lifecycle-architecture.md §4):
+#   <Project>/Config/UAL/policies/*.yaml     team conventions (in Git)
+#   <Project>/Saved/Config/UAL/policies/*.yaml  personal (gitignored)
+# Every rule ships with enforce: false -- report first, gate later.
+# A rule can be disabled with `enabled: false` or overridden by the same id.
+
+rules:
+  - id: naming.blueprint.prefix
+    kind: naming
+    applies_to: [Blueprint, WidgetBlueprint, AnimBlueprint]
+    target: asset_name
+    pattern: '^(BP|WBP|ABP)_[A-Z][A-Za-z0-9_]*$'
+    severity: warning
+    enforce: false
+    message: "blueprint assets should use a BP_/WBP_/ABP_ prefix and PascalCase"
+
+  - id: naming.mesh.prefix
+    kind: naming
+    applies_to: [StaticMesh, SkeletalMesh]
+    target: asset_name
+    pattern: '^(SM|SK)_[A-Z][A-Za-z0-9_]*$'
+    severity: warning
+    enforce: false
+    message: "mesh assets should use an SM_/SK_ prefix"
+
+  - id: naming.texture.prefix
+    kind: naming
+    applies_to: [Texture2D, TextureCube]
+    target: asset_name
+    pattern: '^T_[A-Z][A-Za-z0-9_]*$'
+    severity: info
+    enforce: false
+    message: "texture assets should use a T_ prefix"
+
+  - id: directory.content_root
+    kind: directory
+    applies_to: ["*"]
+    target: package_path
+    pattern: '^/Game(/|$)'
+    severity: warning
+    enforce: false
+    message: "project assets should live under /Game"
+
+  - id: directory.no_temp_folders
+    kind: directory
+    applies_to: ["*"]
+    target: package_path
+    pattern: '/(Temp|Backup|WIP|Old)/'
+    expect: no_match
+    severity: warning
+    enforce: false
+    message: "assets in temporary folders should not be published"
+
+  - id: format.no_binary_blob_tags
+    kind: format
+    applies_to: ["*"]
+    forbidden_tags: [FiBData, Thumbnail, ActorMetaData]
+    severity: warning
+    enforce: false
+    message: "binary editor blobs must not enter the index payload"
+
+  - id: format.max_tag_value_length
+    kind: format
+    applies_to: ["*"]
+    max_tag_value_length: 512
+    severity: info
+    enforce: false
+    message: "tag values are truncated at 512 characters by the extractor"
+
+  - id: reference.no_script_targets
+    kind: reference
+    applies_to: ["*"]
+    forbidden_target_prefixes: [/Script]
+    severity: warning
+    enforce: false
+    message: "class/script references are not indexable asset dependencies"
+
+  - id: reference.max_dependencies
+    kind: reference
+    applies_to: ["*"]
+    max_dependencies: 256
+    severity: info
+    enforce: false
+    message: "review assets with unusually large dependency fan-out"
+
+  - id: naming.strict_pascal
+    kind: naming
+    applies_to: ["*"]
+    target: asset_name
+    pattern: '^[A-Z][A-Za-z0-9]*$'
+    severity: error
+    enforce: true
+    enabled: false
+    message: "strict PascalCase (opt-in; disabled by default)"

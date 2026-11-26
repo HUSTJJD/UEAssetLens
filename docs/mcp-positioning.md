@@ -5,6 +5,8 @@
 > 40 个含 C++ 工具的 Toolset（见父工程 `Docs/ai-capabilities/toolset-inventory.yaml`）。
 > 本文只定义**方向、分类、契约骨架**，不实现代码；工具名与 schema 落地时必须按
 > `CLAUDE.md` 的四处同步规则走生成器。
+> 定位的进一步升级（资产内核、插件式扩展、四级偏好、五层 diff、AI 工作流）见
+> [资产全生命周期架构规格](asset-lifecycle-architecture.md)；本文的事务层设计是其中的 Phase 3。
 
 ## 1. 定位
 
@@ -18,7 +20,7 @@
 ## 2. 架构更正：按能力类型分层，不按实现归属分层
 
 早期把「UAL 语义层」与「官方 Toolset 执行层」画成上下两层是**错误的分类**。
-UAL 现有的 4 个语义检索工具（旧对外名 `ual_*`，见 §2.1）本身就是工具（query 类），与官方 `EditorToolset.FindAssets`、
+UAL 现有的语义检索工具（旧对外名 `ual_*`，见 §2.1；现共 10 个，见 §5.1）本身就是工具（query 类），与官方 `EditorToolset.FindAssets`、
 `GetAssetTags` 等 Read 工具处于**同一层**；区别只在它们的语义深度（16 维指纹、
 FTS BM25、共现图、TOON 压缩），而不在层级。
 
@@ -179,12 +181,43 @@ planned ──审批──> approved ──apply(dry_run=false)──> applied �
 
 | 优先级 | 类别 | 能力 | 理由 |
 |---|---|---|---|
-| P0 | Query | 语义检索、16 维指纹查重、共现装配、TOON 批量召回 | 官方 0 命中，UAL 护城河；已有 4 个工具需并入统一目录 |
+| P0 | Query | 语义检索、16 维指纹查重、共现装配、TOON 批量召回 | 官方 0 命中，UAL 护城河；已有 10 个工具需并入统一目录 |
 | P0 | Execute | 计划 / 审批 / 执行 / 验证 / 回滚 | 官方 0 命中，编辑可信的前提 |
 | P0 | — | 编辑后索引一致性 | 现无事件监听 |
 | P1 | Query | 资产引用图谱语义查询、索引健康度检查 | 官方只有 `GetReferencers` 等点查询，无图谱/相似度 |
 | P1 | Edit | 语义感知批量替换（查重→引用替换）、共现图批量装配、资产 diff 预览 | 官方有单次写，无"按语义结果批量改" |
 | P2 | Edit | 跨资产引用安全的重命名 / 移动 | 官方有 `RenameFolder` 等，缺引用事务性保障 |
+
+### 5.1 落地状态（2026-11-24）
+
+本轮补齐了「特征收集 / 检索 / 依赖」三块，**编辑事务层仍待单独一轮**：
+
+| 能力 | 状态 | 落点 |
+|---|---|---|
+| 全资产领域特征收集 | 已落地 | `FUALTypedFeatureExtractor`（Priority 100，24 族 profile），`feature.*` 写入 `domain_spec`，零加载、零 schema 变更 |
+| 共现图生成 | 已落地 | `UALIndexBuilderCommandlet` 同目录 + 名称 token Jaccard，每资产上限 8 条 `CO_OCCURS`；`DEPENDS_ON` 过滤 `/Script` 类引用 |
+| 引用图谱语义查询 | 已落地 | `UEAssetLens.AssetGraphToolset.GetDependencies` / `GetReferencers`（有界递归 BFS，环检测） |
+| 索引健康度 | 已落地 | `UEAssetLens.AssetGraphToolset.GetIndexHealth`（断裂 / 孤立 / 外部引用 / 指纹缺失 / 族分布） |
+| 全库指纹查重 | 已落地 | `UEAssetLens.AssetGraphToolset.FindDuplicates` |
+| 特征检索与词表发现 | 已落地 | `UEAssetLens.AssetSemanticToolset.SearchByFeatures` / `ListFeatureKeys` |
+| 计划 / 审批 / 执行 / 验证 / 回滚 | **未落地** | 规格见 §4，执行通道未定稿（§10.4），索引一致性仍缺重扫触发 |
+| 语义感知批量替换 / 引用安全重命名 | 未落地 | 依赖事务层 |
+
+现在共 **10 个只读工具**（`AssetSemanticToolset` 6 + `AssetGraphToolset` 4），全部 `accessMode=read`。`GetAnnotations()` 目前硬编码 read，新增 Write/Execute 工具前必须改为按 `AIAccessMode` 分派。
+
+**真实 UE6 索引验证（2026-11-24）**：`ual-cli build --engine-cmd UnrealEditor.exe` 用模块限定名
+`-run=UEAssetLensEditor.UALIndexBuilder` 扫描 `/Game`，产出 15 条 16 键记录、56 条边（其中 44 条
+确定性 `CO_OCCURS`），staging YAML 可被 PyYAML 完整解析（0 非法控制字符），`feature.*` 10 个键
+在全部 15 条记录上齐备。族分布为 Blueprint 13 / World 2，与工程当前 13 个骨架蓝图 + 2 张关卡一致。
+过程中修掉两个真实缺陷：Blueprint `FiBData` 二进制 Tag 的 C1 控制字符（提取器跳过 + `UEYaml`
+emitter 转义 `0x7F–0x9F`）以及 UE6 commandlet 成功仍返回非零退出码（`ual-cli` 改以 staging 产物为准）。
+
+**headless 端到端（2026-11-24）**：编辑器内官方 MCP 注册 `10 UAL tools`，`tools/call` 对 10 个工具
+全部 PASS（`isError=None`），数据来自上述真实索引：`SearchAssets` 3 条、`InspectAsset` 完整 AssetSpec、
+`GetCooccurringBundle` 3 条（由新确定性共现边产出）、`FindSimilarAssets` 8 条、`GetDependencies` 29 条
+两跳、`GetReferencers` 34 条影响面、`GetIndexHealth` 11 项指标、`FindDuplicates` 5 对、
+`SearchByFeatures` 15 行、`ListFeatureKeys` 10 个键。注意官方 MCP 在编辑器执行慢任务期间会返回
+`Not run: ... slow task`，这是 host 保护而非工具故障，客户端需等待后重试。
 
 **禁止重复实现**（官方已具备，直接路由）：`FindAssets` / `GetAssetTags` / `CreateMaterial` /
 `SetMaterial` / `Duplicate` / `Delete` / `SaveAsset` / `AddUserAssetTags` /
@@ -211,7 +244,7 @@ MCP 侧 DuckDB 只读连接、SQL 参数化、工具返回 `str`。
 | 场景 | 可用能力 |
 |---|---|
 | UE6 + 官方 MCP 插件启用 | 全量：Query + Edit + 事务层，单一 HTTP 入口 |
-| 官方插件缺失 / 非 UE6 | 降级为 Python stdio server 的 4 个只读检索工具 + `ual-cli`；编辑能力明确不可用 |
+| 官方插件缺失 / 非 UE6 | 降级为 Python stdio server 的 10 个只读工具 + `ual-cli`；编辑能力明确不可用 |
 | 无 UE 引擎（CI / 离线） | Python server + DuckDB，44 项测试与生成门禁照常运行 |
 
 官方 MCP / Toolset 均为 `Experimental + NoRedist`，**只能开发期启用，不可随发布包分发**；
@@ -246,5 +279,12 @@ README 与 `docs/index.md` 必须写明该分级，避免用户误以为装了 U
 2. Python stdio server 的长期定位：仅降级路径，还是与 HTTP 双轨并存。
 3. 审批粒度：逐操作确认 vs 每个 plan 一次确认；默认建议逐 `Write` 操作确认。
 4. 事务层调用官方工具的机制：经 `IModelContextProtocolModule` 查找已注册工具 `Run`，
-   还是直接走 `UE::ToolsetRegistry::FToolsetRegistry`；本机编译验证被工具链版本问题阻断，
-   需在可编译环境实测后定稿。
+   还是直接走 `UE::ToolsetRegistry::FToolsetRegistry`。**编译环境 blocker 已消除**
+   （`AnnEditor Win64 Development` 全量 4450 actions `Result: Succeeded`），可实测后定稿。
+   路径 A（Python 子进程 HTTP 回环 `call_tool`）与 `CLAUDE.md` 的「只用 duckdb / PyYAML /
+   mcp 三依赖、禁止手写协议层」冲突，且引擎内嵌 Python 未装 `mcp`；路径 B（C++ 直调
+   `ToolsetRegistry`）需在 `UEAssetLensMCP.Build.cs` 加模块依赖并触碰「工具调用委托
+   `engine_bridge.py` 子进程」红线。折中建议：**`PlanEdit` / `VerifyEdit`（Read）留在 Python，
+   `ApplyPlan` / `RollbackEdit`（Write）用薄 C++ 层经 `IModelContextProtocolModule` 查已注册
+   工具 `Run`**，白名单以独立常量表维护并对齐父工程
+   `Docs/ai-capabilities/toolset-inventory.yaml`。此决策需确认后实施。

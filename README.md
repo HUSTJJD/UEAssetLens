@@ -5,7 +5,9 @@
 
 > 零多模态大模型依赖的 Unreal Engine 确定性资产语义索引、防重复检测与 AI Agent（MCP）检索中枢。
 
-**MCP 定位**：UEAssetLens 是 Epic 官方 MCP 的**统一资产工具层与编辑事务层**——用确定性语义索引回答「该改哪个资产」，把实际写操作交给官方 Toolset，并用事务层保证「改完可验证、可回滚、索引仍一致」。工具按 `AIAccessMode` 统一分为 Query / Edit / Execute 三类：UAL 的 4 个检索工具属于 Query 类，与官方 Read 工具同层；官方已有的通用写操作不重复实现，缺口部分（语义查重、批量召回、计划 / 审批 / 回滚）由 UAL 自建补齐。详见 [MCP 定位与事务层规格](docs/mcp-positioning.md)。
+**架构定位（v0 升级中）**：UEAssetLens 正从「索引 + 工具集」升级为**资产内核（Asset Kernel）**——所有底层资源交互的唯一入口，覆盖资产的检索、复用、管理、开发、编辑、校验与演化全生命周期；向上服务「一句话做 FPS 3C」这类 AI 工作流，向外提供插件式扩展点与四级可覆盖偏好。五层架构、九个扩展方向、命名/目录/格式规范体系、五层资产 diff 契约与分阶段路线见 [资产全生命周期架构规格](docs/asset-lifecycle-architecture.md)。当前已落地的框架骨架是 `Server/ual_common/{settings,policy,registry}.py` 与 `Config/UAL/policies/default.yaml`；内置规则默认只报告不阻断（`enforce: false`），团队与个人可在 `<Project>/Config/UAL/` / `Saved/Config/UAL/` 覆盖。
+
+**MCP 定位**：UEAssetLens 是 Epic 官方 MCP 的**统一资产工具层与编辑事务层**——用确定性语义索引回答「该改哪个资产」，把实际写操作交给官方 Toolset，并用事务层保证「改完可验证、可回滚、索引仍一致」。工具按 `AIAccessMode` 统一分为 Query / Edit / Execute 三类：UAL 的 6 个语义检索工具与 4 个图谱工具属于 Query 类，与官方 Read 工具同层；官方已有的通用写操作不重复实现，缺口部分（语义查重、批量召回、计划 / 审批 / 回滚）由 UAL 自建补齐。详见 [MCP 定位与事务层规格](docs/mcp-positioning.md)。
 
 **文档站**：<https://hustjjd.github.io/UEAssetLens/>（由 GitHub Actions 自动构建发布）
 
@@ -28,13 +30,13 @@ UEAssetLens/
 ├─ Source/
 │  ├─ UEAssetLens/          # Runtime：UALTypes、16 维指纹数学
 │  ├─ UEAssetLensEditor/    # Editor：AssetRegistry 监听、Commandlet、IAssetExtractor、Sink
-│  ├─ UEAssetLensMCP/       # Editor：把 4 个工具注册进 Epic 官方 Unreal MCP（AddTool）
+│  ├─ UEAssetLensMCP/       # Editor：把 10 个工具注册进 Epic 官方 Unreal MCP（AddTool）
 │  └─ UEAssetLensTests/     # C++ 自动化单元测试
 ├─ Server/
 │  ├─ schema/               # init.sql、rebuild_fts.sql、PROTOCOL.md（唯一数据契约）
 │  ├─ ual_common/           # db.py / toon.py / yamlspec.py / fingerprint.py
-│  ├─ ual_mcp/              # MCP Server：4 个工具、stdio 服务、引擎内桥、工具 schema
-│  ├─ ual_cli/              # ual-cli：4 个命令 + self-test
+│  ├─ ual_mcp/              # MCP Server：10 个工具、stdio 服务、引擎内桥、工具 schema
+│  ├─ ual_cli/              # ual-cli：5 个命令 + self-test
 │  └─ tests/                # pytest 端到端测试与种子数据
 ├─ Tools/                   # run_tests.ps1、setup_mcp.ps1、gen_docs.py
 ├─ docs/                    # MkDocs 文档站
@@ -51,11 +53,13 @@ python -m pip install -r requirements.txt
 python Server/ual_cli/ual_cli.py build --project /path/to/Ann --from-yaml Server/tests/seed.yaml
 python Server/ual_cli/ual_cli.py build --project /path/to/Ann --demo
 
-# 2) 自检：DDL → 灌库 → 4 个 MCP 工具 → 4 个 CLI 命令
+# 2) 自检：建库 → 三个门禁 → Parquet 导出 → 策略报告/严格模式
 python Server/ual_cli/ual_cli.py self-test
 
 # 3) CI 门禁
 python Server/ual_cli/ual_cli.py lint-duplicates --threshold 0.85
+python Server/ual_cli/ual_cli.py lint-policy --project /path/to/Ann
+python Server/ual_cli/ual_cli.py lint-policy --project /path/to/Ann --strict --fail-on warning
 python Server/ual_cli/ual_cli.py verify-references --scan-dirs Content/Abilities,Content/Script
 python Server/ual_cli/ual_cli.py export-parquet --out .ual/shared_catalog.parquet
 
@@ -87,19 +91,25 @@ UnrealEditor-Cmd.exe Ann.uproject -run=UALIndexBuilder -Roots=/Game,/UEAbilityKi
 | `UEAssetLens.AssetSemanticToolset.InspectAsset` | `logical_id` 或 `asset_path` | YAML：完整资产契约 |
 | `UEAssetLens.AssetSemanticToolset.GetCooccurringBundle` | `asset_path`, `top_k` | TOON：配套资产包 |
 | `UEAssetLens.AssetSemanticToolset.FindSimilarAssets` | `asset_path`, `threshold` | TOON：余弦相似度 ≥ 阈值的已有资产 |
+| `UEAssetLens.AssetSemanticToolset.SearchByFeatures` | `feature_key`, `value_contains`, `asset_class`, `family`, `limit` | TOON：按 `feature.*` 特征键检索 |
+| `UEAssetLens.AssetSemanticToolset.ListFeatureKeys` | `limit` | TOON：索引中实际存在的特征词表 |
+| `UEAssetLens.AssetGraphToolset.GetDependencies` | `asset_path`, `max_depth`, `edge_type`, `limit` | TOON：有界多跳依赖 BFS |
+| `UEAssetLens.AssetGraphToolset.GetReferencers` | 同上 | TOON：反向影响面 BFS |
+| `UEAssetLens.AssetGraphToolset.GetIndexHealth` | `top_n` | TOON：断裂 / 孤立 / 外部引用 / 热点 / 族分布 |
+| `UEAssetLens.AssetGraphToolset.FindDuplicates` | `threshold`, `limit` | TOON：全库 16 维指纹查重对 |
 
 `filters` 支持的硬约束：`skeleton`、`duration_min`、`duration_max`、`min_forward_cm`、`max_forward_cm`、`dominant_limb`、`asset_class`。
 
 ## 引擎内官方 MCP 接入（UE6 Experimental）
 
-UE6 源码树随附 Epic 第一方 `ModelContextProtocol` 插件（`FriendlyName: Unreal MCP`，Experimental，默认不启用）。UAL 通过 `Source/UEAssetLensMCP/` 把同一批 4 个工具注册进这个官方 server，形成**双通道、单一索引**：
+UE6 源码树随附 Epic 第一方 `ModelContextProtocol` 插件（`FriendlyName: Unreal MCP`，Experimental，默认不启用）。UAL 通过 `Source/UEAssetLensMCP/` 把同一批 10 个工具注册进这个官方 server，形成**双通道、单一索引**：
 
 | 通道 | 场景 | 传输 |
 |---|---|---|
 | 引擎内官方 MCP | 编辑器开着，Agent 直接问资产 | HTTP `http://127.0.0.1:8000/mcp` |
 | 独立 Python MCP / `ual-cli` | CI、无编辑器、无头构建机 | stdio / CLI |
 
-**选择 `AddTool` 而非 `UToolsetDefinition`**：ToolsetRegistry 会把工具名限定为 `<ToolsetName>.<ToolName>`，破坏与 Python 侧及 `tool_schemas.yaml` 共享的 1:1 工具名契约；且 4 个工具全部只读，不需要 Toolset 的权限/发现机制。`IModelContextProtocolModule::AddTool` 只需依赖 `ModelContextProtocol` 一个模块。
+**选择 `AddTool` 而非 `UToolsetDefinition`**：ToolsetRegistry 会把工具名限定为 `<ToolsetName>.<ToolName>`，破坏与 Python 侧及 `tool_schemas.yaml` 共享的 1:1 工具名契约；且 10 个工具全部只读，不需要 Toolset 的权限/发现机制。`IModelContextProtocolModule::AddTool` 只需依赖 `ModelContextProtocol` 一个模块。
 
 调用链：
 
@@ -116,7 +126,7 @@ MCP client → Epic Unreal MCP (HTTP) → FUALEngineMcpTool::RunAsync (线程池
 1. 在工程中启用 `ModelContextProtocol` 插件（`UEAssetLens.uplugin` 已声明为 `Optional` 依赖），并确认 `AllToolsets` 按需启用。
 2. 先建索引：`python Server/ual_cli/ual_cli.py build --project <root>`。
 3. 启动编辑器；`UEAssetLensMCP` 在 `PostEngineInit` 自动 `AddTool`。控制台执行 `ModelContextProtocol.RefreshTools` 可热重载。
-4. 客户端连接 `http://127.0.0.1:8000/mcp`；`tools/list` 应出现 `UEAssetLens.AssetSemanticToolset.SearchAssets` 等 4 个工具。
+4. 客户端连接 `http://127.0.0.1:8000/mcp`；`tools/list` 应出现 `UEAssetLens.AssetSemanticToolset.SearchAssets` 等 10 个工具（含 `AssetGraphToolset.*` 四个图谱工具）。
 
 **Python 依赖走 UE 官方途径**：`UEAssetLens.uplugin` 的 `PythonRequirements` 声明
 `duckdb==2.0.0` 与 `PyYAML==6.0.3`（带官方 wheel hash），由 `PythonScriptPlugin` 在
@@ -145,9 +155,9 @@ MCP client → Epic Unreal MCP (HTTP) → FUALEngineMcpTool::RunAsync (线程池
 | M1 存储底座与通用提取器 | **已实现** | DuckDB DDL（实测 DuckDB 2.0.0）、UE 插件三模块骨架、16 维指纹数学、`IAssetExtractor`、`FUniversalReflectionExtractor`、AssetRegistry 增量监听、无头 Commandlet、JSONL 落盘 |
 | M1+ 全类型索引覆盖 | **部分（待 UE 编译）** | 多挂载根扫描（`-Roots=` / `-IncludePlugins`）、taxonomy 单一事实源（24 族）、`logical_id` 碰撞消歧；Python 侧 44 项 pytest 通过，C++ 侧需本地 UE6 SDK 编译验证 |
 | M2 四大核心提取器 | **部分** | 指纹算法与 YAML 生成器已就绪；StaticMesh / AnimMontage / Material / Blueprint 的 UE 领域反射代码尚未全量落地 |
-| M3 图谱与 MCP Server | **已实现** | 4 个工具、TOON/YAML 唯一序列化实现、`asset_edges` 共现查询；基于官方 MCP SDK 2.x（`MCPServer`），无手写协议降级 |
-| M4 CI 门禁 CLI | **已实现** | 4 个命令 + `self-test` + pytest 端到端测试；UE 侧端到端联调待本地 UE SDK |
-| M5 引擎内官方 MCP | **已实现** | `UEAssetLensMCP` 用 `AddTool` 注册 4 个工具、`engine_bridge.py` 子进程桥、`tool_schemas.yaml` 三端共享契约；实机联调状态见 `docs/known-limitations.md` |
+| M3 图谱与 MCP Server | **已实现** | 10 个工具、TOON/YAML 唯一序列化实现、`asset_edges` 共现查询；基于官方 MCP SDK 2.x（`MCPServer`），无手写协议降级 |
+| M4 CI 门禁 CLI | **已实现** | 5 个命令（含 `lint-policy`）+ `self-test` + pytest 端到端测试；UE 侧端到端联调待本地 UE SDK |
+| M5 引擎内官方 MCP | **已实现** | `UEAssetLensMCP` 用 `AddTool` 注册 10 个工具、`engine_bridge.py` 子进程桥、`tool_schemas.yaml` 三端共享契约；实机联调状态见 `docs/known-limitations.md` |
 
 > 已知边界与未验证项见 `docs/known-limitations.md`。10 万级资产冷建库 <30s、增量 <1s 是设计目标，本仓库尚未提供实测基准。
 

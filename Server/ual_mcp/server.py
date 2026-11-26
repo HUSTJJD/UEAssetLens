@@ -69,6 +69,49 @@ def _register(sdk: Any, con: duckdb.DuckDBPyConnection) -> None:
         """16-dim fingerprint duplicate detection; returns TOON."""
         return tools.ual_find_similar_assets(con, asset_path, threshold)
 
+    @sdk.tool(name="UEAssetLens.AssetGraphToolset.GetDependencies")
+    def ual_get_dependencies(
+        asset_path: str, max_depth: int = 2,
+        edge_type: str = "DEPENDS_ON", limit: int = 50,
+    ) -> str:
+        """Bounded downstream dependency walk; returns TOON."""
+        return tools.ual_get_dependencies(con, asset_path, max_depth, edge_type, limit)
+
+    @sdk.tool(name="UEAssetLens.AssetGraphToolset.GetReferencers")
+    def ual_get_referencers(
+        asset_path: str, max_depth: int = 2,
+        edge_type: str = "DEPENDS_ON", limit: int = 50,
+    ) -> str:
+        """Reverse impact surface; returns TOON."""
+        return tools.ual_get_referencers(con, asset_path, max_depth, edge_type, limit)
+
+    @sdk.tool(name="UEAssetLens.AssetGraphToolset.GetIndexHealth")
+    def ual_get_index_health(top_n: int = 5) -> str:
+        """Index quality report; returns TOON."""
+        return tools.ual_get_index_health(con, top_n)
+
+    @sdk.tool(name="UEAssetLens.AssetGraphToolset.FindDuplicates")
+    def ual_find_duplicates(threshold: float = 0.95, limit: int = 20) -> str:
+        """Whole-index fingerprint duplicate pairs; returns TOON."""
+        return tools.ual_find_duplicates(con, threshold, limit)
+
+    @sdk.tool(name="UEAssetLens.AssetSemanticToolset.SearchByFeatures")
+    def ual_search_by_features(
+        feature_key: Optional[str] = None,
+        value_contains: Optional[str] = None,
+        asset_class: Optional[str] = None,
+        family: Optional[str] = None,
+        limit: int = 20,
+    ) -> str:
+        """Retrieve assets by normalized typed-extractor feature keys; returns TOON."""
+        return tools.ual_search_by_features(
+            con, feature_key, value_contains, asset_class, family, limit)
+
+    @sdk.tool(name="UEAssetLens.AssetSemanticToolset.ListFeatureKeys")
+    def ual_list_feature_keys(limit: int = 50) -> str:
+        """Catalog of feature keys present in the index; returns TOON."""
+        return tools.ual_list_feature_keys(con, limit)
+
 
 def run_server(con: duckdb.DuckDBPyConnection) -> None:
     sdk = _create_sdk_server()
@@ -90,6 +133,12 @@ def self_test() -> int:
         ("UEAssetLens.AssetSemanticToolset.InspectAsset", tools.ual_inspect_asset(con, "AnimMontage:AM_Knight_HeavySlash_02")),
         ("UEAssetLens.AssetSemanticToolset.GetCooccurringBundle", tools.ual_get_cooccurring_bundle(con, HERO, 5)),
         ("UEAssetLens.AssetSemanticToolset.FindSimilarAssets", tools.ual_find_similar_assets(con, HERO, 0.85)),
+        ("UEAssetLens.AssetGraphToolset.GetDependencies", tools.ual_get_dependencies(con, HERO, 3)),
+        ("UEAssetLens.AssetGraphToolset.GetReferencers", tools.ual_get_referencers(con, HERO, 3)),
+        ("UEAssetLens.AssetGraphToolset.GetIndexHealth", tools.ual_get_index_health(con, 5)),
+        ("UEAssetLens.AssetGraphToolset.FindDuplicates", tools.ual_find_duplicates(con, 0.95, 10)),
+        ("UEAssetLens.AssetSemanticToolset.SearchByFeatures", tools.ual_search_by_features(con, "kinematics")),
+        ("UEAssetLens.AssetSemanticToolset.ListFeatureKeys", tools.ual_list_feature_keys(con, 20)),
     ]
     print(f"[ual] seeded {stats['assets']} assets / {stats['edges']} edges")
     for name, output in checks:

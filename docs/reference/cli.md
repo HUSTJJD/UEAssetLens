@@ -30,6 +30,18 @@ Cosine self-join duplicate gate
 | `--threshold` | `float` | `0.85` |  |
 | `--diff-only` | `flag` |  | Only assets added in this Git change |
 
+## `lint-policy`
+
+Declarative asset policy gate (four-layer UAL preferences)
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | UE project root for team/user preference layers |
+| `--namespace` |  | `policies` | UAL preference namespace to load |
+| `--limit` | `int` | `100` | Max violation rows in the TOON report |
+| `--fail-on` |  | `error` | Minimum severity that can block |
+| `--strict` | `flag` |  | Block on severity alone; rules are report-only by default |
+
 ## `verify-references`
 
 Validate asset references in configs/scripts
@@ -58,6 +70,7 @@ Offline end-to-end check
 | 命令 | 通过 | 拦截 | 环境错误 |
 | --- | --- | --- | --- |
 | `lint-duplicates` | 0 | 1（发现重复对） | 2（索引缺失） |
+| `lint-policy` | 0 | 1（enforcing 规则命中或 --strict 命中） | 2（索引缺失） |
 | `verify-references` | 0 | 1（发现断裂引用） | 2（索引缺失） |
 | `build` / `export-parquet` / `self-test` | 0 | 1 | 2 |
 

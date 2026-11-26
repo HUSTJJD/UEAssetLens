@@ -17,6 +17,10 @@
 
 字段变更必须**四处同步**并递增 `schema_meta.schema_version`。禁止单侧改字段。
 
+**资产内核框架骨架**：`Server/ual_common/settings.py`（builtin < plugin < project < user 四级偏好覆盖；团队写 `<Project>/Config/UAL/`，个人写 `<Project>/Saved/Config/UAL/`）、`Server/ual_common/policy.py`（声明式命名/目录/格式/引用规则引擎，内置规则默认 `enforce: false` 只报告不阻断）、`Server/ual_common/registry.py`（九个 namespace 的统一扩展注册）是插件式扩展的地基。**新增业务规则必须写成 YAML 数据或注册进 `ExtensionRegistry`，禁止再往匿名 namespace 里加 `static const` 硬编码表**（现有 `GProfileRules` / `GPrefixes` 是待迁移的反例）。改这三个模块必须同步 `Server/tests/test_policy.py` 与 `docs/asset-lifecycle-architecture.md`。它们与 16 键契约、`TOOL_DEFS` 生成链刻意解耦，**不得借机改动**这两条已验证的链路。
+
+**策略引擎的对外入口**：`ual-cli lint-policy` 由 `Server/ual_common/policy_gate.py` 把只读索引投影成策略输入并输出有界 TOON 报告；规则一律写 YAML，禁止在 CLI 里硬编码。退出码由 `decide_exit_code()` 统一裁决：默认只报告（`enforce: true` + `severity: error` 才阻断），`--strict` / `--fail-on` 供 CI 显式收紧。新增策略须同步 `Server/tests/test_policy_gate.py` 与 `docs/ci-gates.md`。
+
 ## 2. 不可违反的红线
 
 - **禁止引入 VLM / 云端推理 / 外部 GPU**。所有语义必须来自 UE 反射属性、确定性数学或引用图谱。
@@ -65,13 +69,14 @@ python -m mkdocs build --strict --site-dir _site
 
 - [ ] DDL 可在空库执行，重复执行幂等
 - [ ] YAML 文档流灌库后 `assets` / `asset_edges` 行数正确，FTS 可检索
-- [ ] 4 个 MCP 工具输出符合 `PROTOCOL.md` 的 section / 字段顺序
+- [ ] 10 个 MCP 工具输出符合 `PROTOCOL.md` 的 section / 字段顺序
 - [ ] 含逗号的值在 TOON 中被正确引用与还原
 - [ ] 余弦自连接能命中阈值并返回非零退出码
 - [ ] `verify-references` 能识别不存在的资产路径与错误的材质参数名
 - [ ] YAML 输出不含时间戳与绝对本地路径
 - [ ] `Tools/gen_docs.py --check` 无文档漂移，`mkdocs build --strict` 零警告
-- [ ] `python Server/ual_mcp/engine_bridge.py --self-test` 四项通过
+- [ ] `python Server/ual_mcp/engine_bridge.py --self-test` 十项通过
+- [ ] 新增 `feature.*` 键可由 `SearchByFeatures` / `ListFeatureKeys` 检出，`seed.yaml` 与 C++ 提取器键名一致
 
 ## 4.1 文档站约定
 
@@ -85,14 +90,17 @@ python -m mkdocs build --strict --site-dir _site
 
 - `Source/UEAssetLensMCP/` 只在 UE6 且启用 Epic `ModelContextProtocol` 插件时生效。模块在 `PostEngineInit` 检查模块是否已加载，未启用则只打一条 Warning，不影响 `ual-cli` 与独立 Python MCP。
 - **工具命名必须对齐官方限定名（P0）**：官方对外名为 `{ModuleName}.{ClassName}.{FunctionName}`（`FakeToolset.cpp:49` 拼名、MCP 适配器 `ModelContextProtocolToolsetRegistryAdapter.cpp:588` 注册），源码层 UFUNCTION 为 PascalCase（878 个中 877 个）。`ValidateToolName()` 接受 snake_case 只代表**合法**、不代表**规范**。**禁止新增 `ual_*` 裸名工具**：对外名由 `TOOL_DEFS.mcp_name` 唯一决定，`server.py` 用 `@sdk.tool(name=...)` 显式指定（已核实 MCP SDK 2.x 支持），C++ `AddTool` 直接用该限定名注册；Python 内部实现函数名保留 snake_case，与对外名解耦。目标命名表与硬切迁移清单见 `docs/mcp-positioning.md` §2.1，**不保留旧名别名**。
-- **概念按能力分类，实现分两阶段**：UAL 工具（含现有 4 个语义检索工具，限定名见 `docs/mcp-positioning.md` §2.1）与官方工具同属统一工具层，按 `AIAccessMode` 分 `Read`(Query) / `Write`(Edit) / `Execute`(事务)，**不按实现归属分层**。阶段 1 继续用 `IModelContextProtocolModule::AddTool`：ToolsetRegistry 会把工具名限定成 `<Toolset>.<Tool>`（`FakeToolset.cpp:49` 实证），贸然改用 `UToolsetDefinition` 会破坏与 Python 侧共享的 1:1 契约。阶段 2 若要迁移，必须一次性同步 `TOOL_DEFS`、`server.py`、`tool_schemas.yaml`、`docs/reference/*.md` 与所有客户端调用，**不得引入双轨别名**。详见 `docs/mcp-positioning.md`。
+- **概念按能力分类，实现分两阶段**：UAL 工具（现有 10 个：`AssetSemanticToolset` 6 个 + `AssetGraphToolset` 4 个，限定名见 `docs/mcp-positioning.md` §2.1 与 `docs/reference/mcp-tools.md`）与官方工具同属统一工具层，按 `AIAccessMode` 分 `Read`(Query) / `Write`(Edit) / `Execute`(事务)，**不按实现归属分层**。阶段 1 继续用 `IModelContextProtocolModule::AddTool`：ToolsetRegistry 会把工具名限定成 `<Toolset>.<Tool>`（`FakeToolset.cpp:49` 实证），贸然改用 `UToolsetDefinition` 会破坏与 Python 侧共享的 1:1 契约。阶段 2 若要迁移，必须一次性同步 `TOOL_DEFS`、`server.py`、`tool_schemas.yaml`、`docs/reference/*.md` 与所有客户端调用，**不得引入双轨别名**。详见 `docs/mcp-positioning.md`。
 - **禁止重复实现官方已有工具**（`FindAssets` / `CreateMaterial` / `Duplicate` / `SaveAsset` / `SetActorTransform` 等 111 个资产域工具）；新增工具前先查父工程 `Docs/ai-capabilities/toolset-inventory.yaml`。语义检索、指纹查重、共现装配、TOON 批量召回与事务编排属 UAL 自建范围（官方 878 工具中语义查重与 dry-run / 回滚能力命中为 0）。
+- **全资产特征收集统一走 `FUALTypedFeatureExtractor`（Priority 100）**：它对每个 UObject 派生资产先复用 `FUniversalReflectionExtractor` 的 16 键结果，再从 `FAssetData.TagsAndValues` + 确定性数学产出 `feature.*` 键写入既有 `domain_spec` MAP。禁止为该目的新增 `FUALAssetRecord` 字段、新增 staging 顶层键或改 `init.sql`（16 键契约与 `db.py::ASSET_COLUMNS` 必须保持）；禁止 `GetAsset()` / 加载贴图网格 / VLM / embedding。`Server/tests/seed.yaml` 是键名的测试镜像，改 C++ 键名必须同步 seed 与 `PROTOCOL.md` 返回契约表。`UALIndexBuilderCommandlet` 负责确定性 `CO_OCCURS` 边（同目录 + 名称 token Jaccard，每资产上限 8 条）并过滤 `/Script` 类引用。
+- **无头索引命令必须用模块限定名**：UE6 在 PostEngineInit 之前解析 `-run=`，而 `UEAssetLensEditor` 是 `PostEngineInit` 加载的 Editor 模块，裸 `-run=UALIndexBuilder` 会报 `could not find the class UALIndexBuilderCommandlet`。`Server/ual_cli/ual_cli.py::_run_ue_commandlet` 已改用 `-run=UEAssetLensEditor.UALIndexBuilder`（`LaunchEngineLoop.cpp:4220-4225` 会据此先加载模块）。本机 UE6 源码树的 `UnrealEditor-Cmd.exe` 还存在引擎模块 BuildId 不匹配，默认请使用 `UnrealEditor.exe`。
+- **staging YAML 必须能被 PyYAML 解析**：Blueprint 的 `FiBData` / `Thumbnail` 等编辑器二进制 Tag 含 C1 控制字符（实测 `U+008A`），会让整批文档流 `safe_load_all` 失败。`FUniversalReflectionExtractor` 与 `FUALTypedFeatureExtractor` 均跳过这两类 Tag；共享插件 `UEYaml.cpp::AppendQuoted` 另把 `0x7F–0x9F` 一并转义成 `\u00XX`，作为根因修复。新增 Tag 白名单时不得放回二进制 blob。
 - `Server/ual_mcp/tools.py::TOOL_DEFS` 是工具契约唯一事实源（含 `mcp_name` 对外限定名、描述、`inputSchema`）；`Server/ual_mcp/tool_schemas.yaml`（内容仍是等价的 JSON Schema 对象）与 `docs/reference/mcp-tools.md` 由 `Tools/gen_docs.py` 生成，**禁止手工编辑**。改工具名 / 签名必须同步 `TOOL_DEFS`、`server.py` 的 `@sdk.tool(name=...)` 与生成器输出；`gen_docs.py --check` 会比对并拦截漂移。
 - Python MCP Server **只支持官方 MCP SDK 2.x**（`mcp>=2,<3`，v2 中 `FastMCP` 已更名 `MCPServer`）。禁止重新引入手写 JSON-RPC 协议层；SDK 缺失或不兼容时明确报错退出，不静默降级。
 - C++ 侧不引入 DuckDB C API；工具调用委托给 `engine_bridge.py` 子进程，通过 UTF-8 请求/响应文件传参（不要用 stdout，Windows 上会破坏中文注释编码）。
 - **Python 依赖必须走 UE 官方 `PythonRequirements`**：`UEAssetLens.uplugin` 声明 `duckdb` / `PyYAML` 的精确版本与 wheel hash（引擎 `bPipStrictHashCheck` 默认强制校验），由 `PythonScriptPlugin` 装到 `<Project>/Intermediate/PipInstall/Lib/site-packages`；可用 `UnrealBuildTool -Mode=PipInstall -PipAction=Install` 离线安装。`UALEngineMcpBridge` 的默认解释器由 `FPaths::EngineDir()` 推导为引擎内嵌 Python（Win64/Mac/Linux 分支），`engine_bridge.py` 在导入第三方包前把该 site-packages 加入 `sys.path`。**禁止把本机 Python 绝对路径写进工程 Config，禁止回退到裸 `python`**（ABI 与依赖不匹配会导致 `ModuleNotFoundError`）。`Server/requirements.txt` 只服务独立 Python server / CI，两套环境不要混同。
-- 现有 4 个检索工具只读，`GetAnnotations()` 必须返回 `accessMode=read` / `readOnlyHint=true`。**允许新增 `Write` 类工具，但必须经事务层**（`UEAssetLens.AssetEditTransactionToolset.PlanEdit` → 审批 → `UEAssetLens.AssetEditTransactionToolset.ApplyPlan` → `UEAssetLens.AssetEditTransactionToolset.VerifyEdit`），禁止把裸写工具直接暴露给客户端；每个 operation 的 `tool` 必须命中官方工具白名单，`plan_id` 必须确定性（禁止随机 ID / 时间戳 / 本地路径）。新增工具一律显式标注 `AIAccessMode`——未标注按 `Execute` 处理，CI 需拦截。
-- 开放编辑后必须保证索引一致：事务 `commit` 阶段触发 `UALIndexBuilder` 增量重扫，或补 AssetRegistry 事件监听；**MCP 工具侧仍保持 DuckDB `read_only=True`**，写索引只由 Commandlet / 事件监听侧完成。
+- 现有 10 个工具全部只读，`GetAnnotations()` 必须返回 `accessMode=read` / `readOnlyHint=true`。**允许新增 `Write` 类工具，但必须经事务层**（`UEAssetLens.AssetEditTransactionToolset.PlanEdit` → 审批 → `UEAssetLens.AssetEditTransactionToolset.ApplyPlan` → `UEAssetLens.AssetEditTransactionToolset.VerifyEdit`），禁止把裸写工具直接暴露给客户端；每个 operation 的 `tool` 必须命中官方工具白名单，`plan_id` 必须确定性（禁止随机 ID / 时间戳 / 本地路径）。新增工具一律显式标注 `AIAccessMode`——未标注按 `Execute` 处理，CI 需拦截。
+- 开放编辑后必须保证索引一致：事务 `commit` 阶段触发 `UALIndexBuilder` 增量重扫，或补 AssetRegistry 事件监听；**MCP 工具侧仍保持 DuckDB `read_only=True`**，写索引只由 Commandlet / 事件监听侧完成。现状：`UEAssetLensEditorModule.cpp` 已挂 `OnAssetAdded/Removed/Updated` 委托，但 `MarkAdded/MarkRemoved/MarkUpdated` 只做计数标记，**尚未触发重扫**，这是编辑事务层落地前必须补的 P0 缺口。
 - 耗时调用走 `RunAsync` + 线程池，**禁止在 game thread 上同步等 Python 进程**。
 - 每次调用启动一个 Python 进程是已知成本，不要偷偷改成常驻进程而不更新 `docs/known-limitations.md`。
 - 官方 MCP / Toolset 为 `Experimental + NoRedist`，只能开发期启用，**不可随发布包分发**；能力分级与降级行为见 `docs/mcp-positioning.md` 第 7 节。客户端统一走 `http://localhost:8000/mcp`（HTTP），Python stdio server 仅作降级路径保留、不删。

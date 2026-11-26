@@ -301,6 +301,13 @@ void FUniversalReflectionExtractor::FillFromTags(const FAssetData& AssetData, FU
 		{
 			continue;
 		}
+		// FiBData / Thumbnail 是编辑器内部二进制 blob（Blueprint FiB 序列化、
+		// 缩略图），无检索语义、体积大且含 C0/C1 控制字符，会破坏 staging YAML。
+		if (Key.Equals(TEXT("FiBData"), ESearchCase::IgnoreCase) ||
+			Key.Equals(TEXT("Thumbnail"), ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
 		// 剔除超长值，避免把大数组 / blob 塞进 MAP。
 		const FString Value = (Raw.Len() > 512) ? Raw.Left(512) : Raw;
 
