@@ -1,0 +1,140 @@
+# Declarative P1/P2 external-integration boundary. This file is data only.
+# It is not a tool contract and must not be interpreted as executable config.
+schema_version: 1
+kind: external_integration_registry
+
+zero_vlm_red_line:
+  statement: "Zero-VLM red lines mean external generative services are NOT executed, NOT redistributed and NOT invoked by UAL; they remain disabled specifications only."
+  external_generative_execution_by_ual: false
+  external_generative_redistribution_by_ual: false
+  external_generative_invocation_by_ual: false
+  default_network: false
+  default_gpu: false
+  default_cloud: false
+  default_vlm: false
+
+official_mcp_boundary:
+  experimental: true
+  no_redist: true
+  development_only: true
+  loopback_only: true
+  auth: false
+  non_loopback_exposure: false
+
+defaults:
+  enabled: false
+  requires_gpu: false
+  requires_cloud: false
+  requires_vlm: false
+  requires_network: false
+  process_isolation: true
+  status: 规格
+
+integrations:
+  - id: comfyui-image-generation
+    name: ComfyUI
+    phase: P1
+    enabled: false
+    license: GPL-3.0
+    requires_gpu: true
+    requires_cloud: false
+    requires_vlm: true
+    requires_network: false
+    status: 规格
+    process_isolation: true
+    executed_by_ual: false
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    source: Config/UAL/gateway/integrations.yaml
+    asset_type_roles: [surface, vfx, ui]
+    reason: "Image generation needs a separately licensed GPU process; GPL-3.0 isolation prevents UAL redistribution and Zero-VLM forbids execution by default."
+
+  - id: trellis-text-to-3d
+    name: TRELLIS
+    phase: P1
+    enabled: false
+    license: MIT
+    requires_gpu: true
+    requires_cloud: false
+    requires_vlm: true
+    requires_network: false
+    status: 规格
+    process_isolation: true
+    executed_by_ual: false
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    source: Config/UAL/gateway/integrations.yaml
+    asset_type_roles: [prop, character, surface]
+    reason: "Text-to-3D generation requires external generative weights and GPU isolation; UAL only records the boundary as a specification."
+
+  - id: audiocraft-music-generation
+    name: AudioCraft
+    phase: P1
+    enabled: false
+    license: MIT
+    requires_gpu: true
+    requires_cloud: false
+    requires_vlm: false
+    requires_network: false
+    status: 规格
+    process_isolation: true
+    executed_by_ual: false
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    source: Config/UAL/gateway/integrations.yaml
+    asset_type_roles: [audio, vfx, animation]
+    reason: "Music and sound generation require external model weights and process isolation; UAL does not execute or redistribute them."
+
+  - id: unirig-blender-interchange
+    name: UniRig+Blender+Interchange
+    phase: P2
+    enabled: false
+    license: license_review_required
+    requires_gpu: true
+    requires_cloud: false
+    requires_vlm: false
+    requires_network: false
+    status: 规格
+    process_isolation: true
+    executed_by_ual: false
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    source: Config/UAL/gateway/integrations.yaml
+    asset_type_roles: [character, animation, locomotion]
+    reason: "Automatic rigging and retopology cross several external components; license review is required before any specification can become an implementation."
+
+  - id: offline-agent-orchestration
+    name: Agent orchestration
+    phase: P1
+    enabled: true
+    license: UAL project
+    requires_gpu: false
+    requires_cloud: false
+    requires_vlm: false
+    requires_network: false
+    status: 已实现
+    process_isolation: false
+    executed_by_ual: true
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    source: Server/ual_common/workflow.py
+    asset_type_roles: [character, animation, locomotion, gameplay, ui, audio, vfx, prop, surface]
+    reason: "Deterministic offline FPS 3C workflow uses read-only retrieval, declarative policy, dry-run transactions and bounded TOON output."
+
+  - id: runtime-tool-audit
+    name: Runtime tool audit
+    phase: P1
+    enabled: true
+    license: UAL project
+    requires_gpu: false
+    requires_cloud: false
+    requires_vlm: false
+    requires_network: false
+    status: 已实现
+    process_isolation: false
+    executed_by_ual: true
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    source: Tools/audit_engine_toolsets.py
+    asset_type_roles: [toolset, contract, audit]
+    reason: "Offline audit reads the parent inventory and generated UAL contract; optional tools/list access is restricted to loopback HTTP."

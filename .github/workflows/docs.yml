@@ -4,6 +4,8 @@ name: Documentation
 # Unreal Engine is far too large for a hosted runner: C++ compilation and
 # automation tests stay local (Tools/run_tests.ps1). Do not add code-checking
 # jobs to this workflow.
+# Push to main publishes; pull requests run the same generation + --strict
+# checks (which catch broken links and generated-page drift) but never deploy.
 
 on:
   push:
@@ -11,13 +13,46 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
-      - "requirements-docs.txt"
-      - "Tools/gen_docs.py"
+      - "Config/UAL/**"
       - "Server/schema/**"
+      - "Server/ual_common/**"
       - "Server/ual_mcp/**"
       - "Server/ual_cli/**"
+      - "Server/tests/**"
+      - "Tools/gen_docs.py"
+      - "Tools/gen_taxonomy.py"
+      - "Tools/audit_tool_annotations.py"
+      - "Tools/audit_engine_toolsets.py"
+      - "Tools/run_tests.ps1"
+      - "Tools/setup_mcp.ps1"
+      - "Tools/bench_index.py"
+      - "requirements*.txt"
       - "CLAUDE.md"
       - ".github/workflows/docs.yml"
+      - ".github/workflows/python-ci.yml"
+      - ".github/workflows/release.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "Config/UAL/**"
+      - "Server/schema/**"
+      - "Server/ual_common/**"
+      - "Server/ual_mcp/**"
+      - "Server/ual_cli/**"
+      - "Server/tests/**"
+      - "Tools/gen_docs.py"
+      - "Tools/gen_taxonomy.py"
+      - "Tools/audit_tool_annotations.py"
+      - "Tools/audit_engine_toolsets.py"
+      - "Tools/run_tests.ps1"
+      - "Tools/setup_mcp.ps1"
+      - "Tools/bench_index.py"
+      - "requirements*.txt"
+      - "CLAUDE.md"
+      - ".github/workflows/docs.yml"
+      - ".github/workflows/python-ci.yml"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
 
 permissions:
@@ -49,13 +84,16 @@ jobs:
         # broken internal link gets noticed before it is on the site.
         run: mkdocs build --strict --site-dir _site
       - name: Setup Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     permissions:
       pages: write

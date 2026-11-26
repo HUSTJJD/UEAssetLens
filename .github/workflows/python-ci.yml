@@ -1,0 +1,78 @@
+name: Python CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "python-ci-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install runtime and docs dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-docs.txt
+      - name: Check generated docs drift
+        run: python Tools/gen_docs.py --check
+      - name: Check generated taxonomy headers drift
+        run: python Tools/gen_taxonomy.py --check
+      - name: Audit generated tool annotations
+        run: python Tools/audit_tool_annotations.py --check
+      - name: Audit offline engine toolset inventory
+        run: python Tools/audit_engine_toolsets.py --check
+      - name: Build documentation site
+        run: python -m mkdocs build --strict
+      - name: Run Python contract tests
+        run: python -m pytest Server/tests -q
+      - name: Run ual-cli self-test
+        run: python Server/ual_cli/ual_cli.py self-test
+      - name: Run Python MCP server self-test
+        run: python Server/ual_mcp/server.py --self-test
+      - name: Run engine bridge self-test
+        run: python Server/ual_mcp/engine_bridge.py --self-test
+      - name: Run 10000-asset index benchmark
+        run: python Tools/bench_index.py --count 10000 --incremental
+      - name: Verify MCP HTTP client DryRun (loopback-only)
+        # PowerShell 7 is present on ubuntu-latest. setup_mcp.ps1 rejects
+        # non-loopback URLs, userinfo and query strings; DryRun writes nothing,
+        # so a temporary ConfigRoot is used and no client config is persisted.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
+          $configRoot = Join-Path ([System.IO.Path]::GetTempPath()) 'ual-config-dryrun'
+          if (Test-Path -LiteralPath $configRoot) { Remove-Item -LiteralPath $configRoot -Recurse -Force }
+          New-Item -ItemType Directory -Path $configRoot -Force | Out-Null
+          try {
+            $output = & $pwsh -NoProfile -File Tools/setup_mcp.ps1 -DryRun -Transport Http -ConfigRoot $configRoot 2>&1
+            $output | ForEach-Object { Write-Host $_ }
+            if ($LASTEXITCODE -ne 0) { throw "setup_mcp.ps1 -DryRun -Transport Http failed ($LASTEXITCODE)" }
+            $text = ($output | Out-String)
+            if ($text -notmatch 'http://localhost:8000/mcp') { throw 'HTTP DryRun did not emit the loopback MCP endpoint' }
+            foreach ($url in [regex]::Matches($text, 'https?://[A-Za-z0-9.:/_-]+')) {
+              $parsed = [System.Uri]::new($url.Value)
+              if ($parsed.Scheme -ne 'http' -or $parsed.Host -notin @('localhost', '127.0.0.1') -or -not [string]::IsNullOrEmpty($parsed.UserInfo)) {
+                throw "HTTP DryRun emitted a disallowed endpoint: $($url.Value)"
+              }
+            }
+            if (Test-Path -LiteralPath (Join-Path $configRoot '.claude.json')) { throw 'DryRun must not write client configuration' }
+            if (Test-Path -LiteralPath (Join-Path $configRoot '.cursor/mcp.json')) { throw 'DryRun must not write client configuration' }
+          }
+          finally {
+            Remove-Item -LiteralPath $configRoot -Recurse -Force -ErrorAction SilentlyContinue
+          }

@@ -1,0 +1,249 @@
+# Builtin extension manifest. Rules are data; implementations are restricted to
+# Server/ual_common/extensions_builtins.py by extensions.py's allowlist.
+# This file is shipped with the plugin and can be overridden by the same `id`
+# in plugin / project / user layers (builtin < plugin < project < user).
+version: 1
+
+rules:
+  - id: policy.no_draft_names
+    namespace: policy
+    name: no_draft_names
+    version: '1'
+    priority: 20
+    applies_to: ['*']
+    capabilities: [custom, validate]
+    impl: ual_common.extensions_builtins.no_draft_names
+    schema:
+      forbidden: [Draft, WIP, Temp]
+      message: draft/WIP assets are not publishable
+
+  - id: asset_type.role_resolver
+    namespace: asset_type
+    name: role_resolver
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [role, assembly]
+    impl: ual_common.extensions_builtins.asset_type_descriptor
+    schema:
+      default_role: unclassified
+      roles:
+        - {match: Anim, role: animation}
+        - {match: BlendSpace, role: locomotion}
+        - {match: Blueprint, role: gameplay}
+        - {match: WidgetBlueprint, role: ui}
+        - {match: BehaviorTree, role: ai}
+        - {match: Blackboard, role: ai}
+        - {match: StaticMesh, role: prop}
+        - {match: SkeletalMesh, role: character}
+        - {match: Material, role: surface}
+        - {match: Sound, role: audio}
+        - {match: Niagara, role: vfx}
+      assembly:
+        - {role: character, relation: driven_by, target_role: gameplay}
+        - {role: animation, relation: played_by, target_role: character}
+        - {role: locomotion, relation: drives, target_role: animation}
+        - {role: ai, relation: controls, target_role: gameplay}
+        - {role: ui, relation: presents, target_role: gameplay}
+        - {role: vfx, relation: accompanies, target_role: animation}
+        - {role: audio, relation: accompanies, target_role: animation}
+        - {role: prop, relation: attached_to, target_role: character}
+        - {role: surface, relation: applied_to, target_role: prop}
+
+  - id: field.asset_role
+    namespace: field
+    name: asset_role
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [typed, query]
+    impl: ual_common.extensions_builtins.field_from_domain
+    schema:
+      type: string
+      source: domain_spec
+      key: feature.role
+      default: unclassified
+      nullable: false
+
+  - id: field.assembly_role
+    namespace: field
+    name: assembly_role
+    version: '1'
+    priority: 90
+    applies_to: ['*']
+    capabilities: [typed, query]
+    impl: ual_common.extensions_builtins.field_from_domain
+    schema:
+      type: string
+      source: domain_spec
+      key: feature.assembly_role
+      default: unclassified
+      nullable: false
+
+  - id: field.quality_tier
+    namespace: field
+    name: quality_tier
+    version: '1'
+    priority: 80
+    applies_to: ['*']
+    capabilities: [typed, query]
+    impl: ual_common.extensions_builtins.field_from_domain
+    schema:
+      type: integer
+      source: domain_spec
+      key: feature.quality_tier
+      default: 0
+      nullable: false
+
+  - id: diff.l0_metadata
+    namespace: diff
+    name: l0_metadata
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [diff]
+    impl: ual_common.extensions_builtins.diff_layer
+    schema:
+      layer: L0
+      kind: fields
+      source: index.metadata
+      fields: [asset_path, logical_id, asset_class, parent_class, taxonomy, tokens, content_hash]
+
+  - id: diff.l1_reflection
+    namespace: diff
+    name: l1_reflection
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [diff]
+    impl: ual_common.extensions_builtins.diff_layer
+    schema:
+      layer: L1
+      kind: fields
+      source: index.reflection_maps
+      fields: [interface_spec, domain_spec]
+
+  - id: diff.l2_graph
+    namespace: diff
+    name: l2_graph
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [diff]
+    impl: ual_common.extensions_builtins.diff_layer
+    schema:
+      layer: L2
+      kind: graph
+      source: index.asset_edges
+
+  - id: diff.l3_payload
+    namespace: diff
+    name: l3_payload
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [diff]
+    impl: ual_common.extensions_builtins.diff_layer
+    schema:
+      layer: L3
+      kind: text
+      source: index.yaml_cache
+      field: yaml_cache
+
+  - id: diff.l4_binary
+    namespace: diff
+    name: l4_binary
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [diff]
+    impl: ual_common.extensions_builtins.diff_layer
+    schema:
+      layer: L4
+      kind: digest
+      source: canonical.L0..L3
+
+  - id: lifecycle.pre_validate
+    namespace: lifecycle
+    name: pre_validate
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [OnPreValidate]
+    impl: ual_common.extensions_builtins.lifecycle_hook
+    schema: {status: observed}
+
+  - id: lifecycle.indexed
+    namespace: lifecycle
+    name: indexed
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [OnIndexed]
+    impl: ual_common.extensions_builtins.lifecycle_hook
+    schema: {status: observed}
+
+  - id: lifecycle.planned
+    namespace: lifecycle
+    name: planned
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [OnPlanned]
+    impl: ual_common.extensions_builtins.lifecycle_hook
+    schema: {status: observed}
+
+  - id: lifecycle.committed
+    namespace: lifecycle
+    name: committed
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [OnCommitted]
+    impl: ual_common.extensions_builtins.lifecycle_hook
+    schema: {status: observed}
+
+  - id: lifecycle.published
+    namespace: lifecycle
+    name: published
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [OnPublished]
+    impl: ual_common.extensions_builtins.lifecycle_hook
+    schema: {status: observed}
+
+  - id: sink.yaml
+    namespace: sink
+    name: yaml
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [artifact]
+    impl: ual_common.extensions_builtins.yaml_sink
+    schema: {format: yaml, encoding: utf-8, newline: LF}
+
+  - id: template.fps_3c
+    namespace: template
+    name: fps_3c
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [expand]
+    impl: ual_common.extensions_builtins.fps_3c_template
+    schema:
+      template_id: fps_3c
+      version: '1'
+      source: Config/UAL/templates/fps_3c.yaml
+
+  - id: gateway.official
+    namespace: gateway
+    name: official
+    version: '1'
+    priority: 100
+    applies_to: ['*']
+    capabilities: [write, execute]
+    impl: ual_common.extensions_builtins.official_gateway
+    schema:
+      whitelist: Config/UAL/gateway/official_tools.yaml
+      default_status: deferred_offline

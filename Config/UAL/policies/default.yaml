@@ -93,3 +93,15 @@ rules:
     enforce: true
     enabled: false
     message: "strict PascalCase (opt-in; disabled by default)"
+
+  # Declarative custom predicate from Config/UAL/extensions/builtin.yaml.
+  # Disabled by default so teams opt in through a project/user layer; the CLI
+  # loads the extension registry, so no arbitrary Python import is needed.
+  - id: custom.no_draft_names
+    kind: custom
+    applies_to: ["*"]
+    extension: no_draft_names
+    severity: info
+    enforce: false
+    enabled: false
+    message: "draft/WIP assets must be reviewed before publishing"

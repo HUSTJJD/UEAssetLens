@@ -3,16 +3,17 @@
 
 This generator uses the standard library plus PyYAML (declared in
 requirements-docs.txt, which the docs workflow installs); it does not need the
-DuckDB / MCP runtime dependencies.
+DuckDB / MCP runtime dependencies. Runtime tool contracts come from the
+builtin-only extension registry, never from project/user YAML layers.
 
 Sources -> generated pages:
   Server/schema/init.sql, rebuild_fts.sql -> docs/reference/schema.md
   Server/schema/PROTOCOL.md               -> docs/reference/protocol.md
-  Server/ual_mcp/tools.py                 -> docs/reference/mcp-tools.md  (TOOL_DEFS + TOON field order)
-  Server/ual_cli/ual_cli.py               -> docs/reference/cli.md        (argparse)
+  Server/ual_mcp/tools.py                 -> docs/reference/mcp-tools.md
+  Config/UAL/extensions/tools.yaml        -> runtime tool contracts
+  Server/ual_cli/ual_cli.py               -> docs/reference/cli.md
   CLAUDE.md                               -> docs/agent-guide.md
-  Server/ual_mcp/tools.py                 -> Server/ual_mcp/tool_schemas.yaml
-                                             (shared by the C++ in-editor MCP tools)
+  Server/ual_mcp/tools.py + registry      -> Server/ual_mcp/tool_schemas.yaml
 
 Usage:
   python Tools/gen_docs.py            regenerate committed pages
@@ -29,6 +30,11 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+SERVER = ROOT / "Server"
+if str(SERVER) not in sys.path:
+    sys.path.insert(0, str(SERVER))
+from ual_common import extensions  # noqa: E402
+
 DOCS = ROOT / "docs"
 REF = DOCS / "reference"
 
@@ -74,6 +80,78 @@ OUTPUTS: dict[str, tuple[str, str]] = {
     "ual_list_feature_keys": (
         "TOON：section `feature_keys`（特征词表）",
         "`Server/ual_common/db.py::feature_key_catalog`",
+    ),
+    "ual_list_extensions": (
+        "TOON：section `extensions`（九 namespace 有界快照）",
+        "`Server/ual_common/extensions.py::render_registry_snapshot`",
+    ),
+    "ual_get_index_revision": (
+        "TOON：section `index_revision`（确定性变更检测摘要）",
+        "`Server/ual_common/revision.py::index_revision`",
+    ),
+    "ual_search_extension_fields": (
+        "TOON：section `extension_fields`（类型化扩展字段检索）",
+        "`Server/ual_common/fields.py::render_search`",
+    ),
+    "ual_list_extension_fields": (
+        "TOON：section `extension_catalog`（字段词表）",
+        "`Server/ual_common/fields.py::render_catalog`",
+    ),
+    "ual_get_assembly_graph": (
+        "TOON：section `asset_role` + `assembly`（声明式装配关系）",
+        "`Server/ual_common/fields.py::assembly_graph`",
+    ),
+    "ual_list_official_tools": (
+        "TOON：section `official_tools`（官方工具白名单）",
+        "`Server/ual_common/gateway.py::Gateway.render_whitelist`",
+    ),
+    "ual_request_rescan": (
+        "TOON：section `asset_paths`（dry-run 增量重扫请求）",
+        "`Server/ual_common/transaction.py::render_rescan`",
+    ),
+    "ual_diff_assets": (
+        "TOON：section `layer_stats`（五层 diff 工件摘要）",
+        "`Server/ual_common/asset_diff.py::render_summary`",
+    ),
+    "ual_read_diff_layer": (
+        "TOON：section `diff_layer`（canonical YAML 分页转 `line_no,text`）",
+        "`Server/ual_mcp/tools.py` + `Server/ual_common/artifacts.py::canonical_yaml`",
+    ),
+    "ual_verify_diff_determinism": (
+        "TOON：section `mismatches`（两次重建逐字节比较）",
+        "`Server/ual_common/asset_diff.py::render_determinism`",
+    ),
+    "ual_plan_edit": (
+        "TOON：section `operations` + `inverse_ops` + `diff_preview`",
+        "`Server/ual_common/transaction.py::render_plan`",
+    ),
+    "ual_apply_plan": (
+        "TOON：section `operations` + `results`（dry-run 默认）",
+        "`Server/ual_common/transaction.py::render_plan`",
+    ),
+    "ual_verify_edit": (
+        "TOON：section `per_op_result` + `residual_risks`",
+        "`Server/ual_common/transaction.py::render_verify`",
+    ),
+    "ual_rollback_edit": (
+        "TOON：section `reverted_ops` + `rescan_paths`",
+        "`Server/ual_common/transaction.py::render_rollback`",
+    ),
+    "ual_expand_gamespec": (
+        "TOON：section `sections` + `errors`（完整 GameSpec 落工件）",
+        "`Server/ual_common/gamespec.py::render_expansion`",
+    ),
+    "ual_run_validation_loop": (
+        "TOON：section `stages` + `assertions` + `errors`（离线验证）",
+        "`Server/ual_common/gamespec.py::render_validation`",
+    ),
+    "ual_get_lifecycle_events": (
+        "TOON：section `lifecycle_events`（审计事件摘要）",
+        "`Server/ual_common/lifecycle.py::render_events`",
+    ),
+    "ual_run_fps_3c_workflow": (
+        "TOON：section `steps`（十步离线 FPS 3C 工作流）",
+        "`Server/ual_common/workflow.py::run_fps_3c`",
     ),
 }
 
@@ -189,65 +267,117 @@ def parse_schema() -> str:
 # --------------------------------------------------------------------------- MCP tools
 
 TOOL_DEFS_SOURCE = "Server/ual_mcp/tools.py"
+RUNTIME_TOOL_SOURCE = "Config/UAL/extensions/tools.yaml"
+SERVER_SOURCE = "Server/ual_mcp/server.py"
 
 
-def load_tool_defs() -> list[dict[str, Any]]:
-    """TOOL_DEFS is the single source of truth for all three MCP frontends."""
+def load_static_tool_defs() -> list[dict[str, Any]]:
+    """Parse the top-level AST literal TOOL_DEFS without importing server deps."""
     src = (ROOT / TOOL_DEFS_SOURCE).read_text(encoding="utf-8")
     for node in ast.parse(src).body:
         if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "TOOL_DEFS":
-            return ast.literal_eval(node.value)
+            return list(ast.literal_eval(node.value))
     raise RuntimeError(f"TOOL_DEFS not found in {TOOL_DEFS_SOURCE}")
 
 
-def load_registered_tool_names() -> set[str]:
-    """Collect the explicit MCP tool names from @sdk.tool(name=...) in server.py.
+def _tool_contract(tool: dict[str, Any]) -> dict[str, Any]:
+    access_mode = str(tool.get("accessMode") or "Read")
+    read_only = bool(tool.get("readOnlyHint", access_mode == "Read"))
+    return {
+        "accessMode": access_mode,
+        "readOnlyHint": read_only,
+        "annotations": {"accessMode": access_mode, "readOnlyHint": read_only},
+        "meta": {"accessMode": access_mode},
+    }
 
-    The Python function name is an implementation detail; the wire name is what
-    the SDK publishes and what TOOL_DEFS.mcp_name must match.
+
+def load_tool_defs() -> list[dict[str, Any]]:
+    """Static AST literal + builtin-only runtime registry; validate all names."""
+    static_defs: list[dict[str, Any]] = []
+    for raw in load_static_tool_defs():
+        tool = dict(raw)
+        tool.setdefault("accessMode", "Read")
+        tool.setdefault("readOnlyHint", True)
+        tool.update(_tool_contract(tool))
+        static_defs.append(tool)
+
+    loaded = extensions.load_builtin_registry()
+    runtime_defs: list[dict[str, Any]] = []
+    for raw in extensions.tool_defs_from_registry(loaded.registry):
+        tool = dict(raw)
+        tool.setdefault("accessMode", "Execute")
+        tool.setdefault("readOnlyHint", tool["accessMode"] == "Read")
+        tool.update(_tool_contract(tool))
+        runtime_defs.append(tool)
+
+    all_defs = static_defs + runtime_defs
+    extensions.validate_tool_names(all_defs)
+    return all_defs
+
+
+def load_registration_contract() -> tuple[set[str], bool]:
+    """Static decorators must match TOOL_DEFS; runtime tools need one registry call.
+
+    The Python function name is an implementation detail. Runtime tools have no
+    decorators: server.py registers them from ``RUNTIME_TOOL_DEFS`` through one
+    ``register_runtime_tools(sdk, con, RUNTIME_TOOL_DEFS)`` call, checked in AST.
     """
-    src = (ROOT / "Server/ual_mcp/server.py").read_text(encoding="utf-8")
+    src = (ROOT / SERVER_SOURCE).read_text(encoding="utf-8")
+    tree = ast.parse(src)
     names: set[str] = set()
-    for node in ast.walk(ast.parse(src)):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        for decorator in node.decorator_list:
-            if not (isinstance(decorator, ast.Call)
-                    and isinstance(decorator.func, ast.Attribute)
-                    and decorator.func.attr == "tool"):
-                continue
-            explicit = None
-            for kw in decorator.keywords:
-                if kw.arg == "name" and isinstance(kw.value, ast.Constant):
-                    explicit = kw.value.value
-            names.add(explicit if explicit is not None else node.name)
-    return names
+    runtime_registered = False
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for decorator in node.decorator_list:
+                if not (isinstance(decorator, ast.Call)
+                        and isinstance(decorator.func, ast.Attribute)
+                        and decorator.func.attr == "tool"):
+                    continue
+                explicit = None
+                for kw in decorator.keywords:
+                    if kw.arg == "name" and isinstance(kw.value, ast.Constant):
+                        explicit = kw.value.value
+                names.add(explicit if explicit is not None else node.name)
+        if (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "register_runtime_tools"):
+            arg_names = [arg.id for arg in node.args if isinstance(arg, ast.Name)]
+            if arg_names == ["sdk", "con", "RUNTIME_TOOL_DEFS"]:
+                runtime_registered = True
+    return names, runtime_registered
 
 
 def build_tool_schemas() -> str:
-    """Emit a YAML contract consumed by the C++ in-editor MCP tools."""
+    """Emit the registry-driven YAML contract consumed by the C++ MCP frontend."""
     defs = load_tool_defs()
-    declared = {tool["mcp_name"] for tool in defs}
-    registered = load_registered_tool_names()
-    if declared != registered:
+    static_count = len(load_static_tool_defs())
+    declared_static = {tool["mcp_name"] for tool in defs[:static_count]}
+    registered, runtime_registered = load_registration_contract()
+    if declared_static != registered:
         raise RuntimeError(
             "TOOL_DEFS and server.py @sdk.tool() registrations diverged: "
-            f"schema-only={sorted(declared - registered)}, "
-            f"code-only={sorted(registered - declared)}"
+            f"schema-only={sorted(declared_static - registered)}, "
+            f"code-only={sorted(registered - declared_static)}"
         )
-    # The C++ frontend reads tools[].name as the MCP tool name. Publish only
-    # the qualified wire name; `name`/`mcp_name` from TOOL_DEFS are internal.
-    published = [
-        {
+    if not runtime_registered:
+        raise RuntimeError(
+            "server.py must call register_runtime_tools(sdk, con, RUNTIME_TOOL_DEFS)"
+        )
+    published: list[dict[str, Any]] = []
+    for tool in defs:
+        contract = _tool_contract(tool)
+        published.append({
             "name": tool["mcp_name"],
             "description": tool["description"],
             "inputSchema": tool["inputSchema"],
-        }
-        for tool in defs
-    ]
+            "accessMode": contract["accessMode"],
+            "readOnlyHint": contract["readOnlyHint"],
+            "annotations": contract["annotations"],
+            "meta": contract["meta"],
+        })
     payload = {
-        "schema_version": "3.0",
-        "source": f"{TOOL_DEFS_SOURCE}::TOOL_DEFS",
+        "schema_version": "4.0",
+        "source": f"{TOOL_DEFS_SOURCE}::TOOL_DEFS + {RUNTIME_TOOL_SOURCE}",
         "note": "AUTO-GENERATED by Tools/gen_docs.py - DO NOT EDIT BY HAND.",
         "tools": published,
     }
@@ -270,16 +400,36 @@ def parse_mcp_tools() -> str:
 
     lines = [
         "# MCP 工具参考", BANNER, "",
-        "> 生成来源：`Server/ual_mcp/tools.py`（`TOOL_DEFS` 与 TOON 字段顺序）。"
+        "> 生成来源：`Server/ual_mcp/tools.py`（`TOOL_DEFS` 与 TOON 字段顺序）、"
+        "`Config/UAL/extensions/tools.yaml`（runtime registry）。"
         "MCP Server 只读连接 `.ual/index.duckdb`。", "",
-        f"共 **{len(defs)}** 个工具。批量工具返回 TOON，单资产工具返回 YAML。", "",
+        f"共 **{len(defs)}** 个工具。静态批量工具返回 TOON，单资产工具返回 YAML；"
+        "runtime 工具返回有界 TOON 摘要 / 分页。", "",
     ]
     for tool in defs:
         name = tool["mcp_name"]
+        contract = _tool_contract(tool)
+        mode = contract["accessMode"]
+        read_only = "true" if contract["readOnlyHint"] else "false"
+        annotations = f"{{accessMode: {mode}, readOnlyHint: {read_only}}}"
+        meta = f"{{accessMode: {mode}}}"
         schema = tool.get("inputSchema", {})
         props = schema.get("properties", {})
         required = set(schema.get("required", []))
-        lines += [f"## `{name}`", "", tool.get("description", ""), ""]
+        schema_yaml = yaml.safe_dump(
+            schema, sort_keys=False, allow_unicode=True, default_flow_style=False
+        ).rstrip()
+        lines += [
+            f"## `{name}`", "", tool.get("description", ""), "",
+            _table(["字段", "值"], [
+                ["`name`", f"`{name}`"],
+                ["`accessMode`", f"`{mode}`"],
+                ["`readOnlyHint`", f"`{read_only}`"],
+                ["`annotations`", f"`{annotations}`"],
+                ["`meta`", f"`{meta}`"],
+            ]), "",
+            "### inputSchema", "", _fence("yaml", schema_yaml), "",
+        ]
         rows = []
         for prop, spec in props.items():
             default = spec.get("default", "")
@@ -306,6 +456,30 @@ def parse_mcp_tools() -> str:
         "DUPLICATE_FIELDS": "duplicate_pairs",
         "FEATURE_FIELDS": "features",
         "FEATURE_KEY_FIELDS": "feature_keys",
+        "EXTENSIONS_FIELDS": "extensions",
+        "INDEX_REVISION_FIELDS": "index_revision",
+        "EXTENSION_FIELD_SEARCH_FIELDS": "extension_fields",
+        "EXTENSION_CATALOG_FIELDS": "extension_catalog",
+        "ASSET_ROLE_FIELDS": "asset_role",
+        "ASSEMBLY_FIELDS": "assembly",
+        "OFFICIAL_TOOL_FIELDS": "official_tools",
+        "RESCAN_PATH_FIELDS": "asset_paths / rescan_paths",
+        "DIFF_LAYER_STATS_FIELDS": "layer_stats",
+        "DIFF_LAYER_FIELDS": "diff_layer",
+        "DIFF_MISMATCH_FIELDS": "mismatches",
+        "PLAN_OPERATION_FIELDS": "operations / inverse_ops / reverted_ops",
+        "PLAN_DIFF_FIELDS": "diff_preview",
+        "PLAN_RESULT_FIELDS": "results",
+        "VERIFY_RESULT_FIELDS": "per_op_result",
+        "RISK_FIELDS": "residual_risks",
+        "EXPANSION_SECTION_FIELDS": "sections",
+        "ERROR_FIELDS": "errors",
+        "VALIDATION_STAGE_FIELDS": "stages",
+        "ASSERTION_FIELDS": "assertions",
+        "LIFECYCLE_EVENT_FIELDS": "lifecycle_events",
+        "WORKFLOW_STEP_FIELDS": "steps",
+        "ALLOWLIST_ISSUE_FIELDS": "allowlist_issues",
+        "RUNTIME_RESULT_FIELDS": "runtime_result",
     }
     for key, values in fields.items():
         rows.append([f"`{label.get(key, key)}`", ", ".join(f"`{v}`" for v in values)])

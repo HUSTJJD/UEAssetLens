@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from ual_common import db
+from ual_common import artifacts, db
 from ual_common.taxonomy import build_taxonomy
 
 REPO = Path(__file__).resolve().parents[2]
@@ -147,3 +147,72 @@ def test_generated_cpp_rules_are_in_sync() -> None:
         check=False,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_null_fingerprint_is_excluded_from_duplicate_cosine_checks(tmp_path: Path) -> None:
+    """Staging NULL / absent / invalid fingerprints must stay SQL NULL.
+
+    A zero-filled 16-vector used to make missing fingerprints look like real
+    ones; both duplicate_pairs() and find_similar() must ignore NULL vectors.
+    """
+    con = db.open_write(tmp_path / "null_fingerprint.duckdb")
+    try:
+        duplicate_paths = ["/Game/Core/BP_Dup_A", "/Game/Core/BP_Dup_B"]
+        null_paths = [
+            "/Game/Core/BP_NoFingerprint",
+            "/Game/Core/SM_AbsentFingerprint",
+            "/Game/Core/SM_InvalidFingerprint",
+        ]
+        fingerprint = [0.2] * 16
+        docs: list[dict[str, Any]] = []
+
+        for index, path in enumerate(duplicate_paths):
+            record = make_record("Blueprint", index)
+            record["asset_path"] = path
+            record["logical_id"] = "Blueprint:" + path.rsplit("/", 1)[-1]
+            record["fingerprint_vec"] = list(fingerprint)
+            docs.append(record)
+
+        explicit_null = make_record("Blueprint", 2)
+        explicit_null["asset_path"] = null_paths[0]
+        explicit_null["logical_id"] = "Blueprint:" + null_paths[0].rsplit("/", 1)[-1]
+        explicit_null["fingerprint_vec"] = None
+        docs.append(explicit_null)
+
+        absent = make_record("StaticMesh", 3)
+        absent["asset_path"] = null_paths[1]
+        absent["logical_id"] = "StaticMesh:" + null_paths[1].rsplit("/", 1)[-1]
+        absent.pop("fingerprint_vec", None)
+        docs.append(absent)
+
+        invalid = make_record("StaticMesh", 4)
+        invalid["asset_path"] = null_paths[2]
+        invalid["logical_id"] = "StaticMesh:" + null_paths[2].rsplit("/", 1)[-1]
+        invalid["fingerprint_vec"] = [0.2] * 15
+        docs.append(invalid)
+
+        staging = tmp_path / "staging.yaml"
+        staging.write_text(artifacts.canonical_yaml_stream(docs), encoding="utf-8")
+        assert db.ingest_records(con, db.load_yaml_docs(staging)) == {"assets": 5, "edges": 0}
+
+        rows = con.execute(
+            "SELECT asset_path FROM assets WHERE fingerprint_vec IS NULL ORDER BY asset_path"
+        ).fetchall()
+        assert [row[0] for row in rows] == sorted(null_paths)
+        assert con.execute(
+            "SELECT COUNT(*) FROM assets WHERE fingerprint_vec IS NOT NULL"
+        ).fetchone()[0] == 2
+
+        pairs = db.duplicate_pairs(con, threshold=0.99)
+        assert len(pairs) == 1
+        assert {pairs[0]["lhs"], pairs[0]["rhs"]} == set(duplicate_paths)
+        for null_path in null_paths:
+            assert db.find_similar(con, null_path, threshold=0.0) == []
+        assert {
+            row["asset_path"] for row in db.find_similar(con, duplicate_paths[0], threshold=0.0)
+        } == {duplicate_paths[1]}
+
+        metrics = {item["metric"]: item["value"] for item in db.index_health(con)["metrics"]}
+        assert metrics["missing_fingerprint"] == len(null_paths)
+    finally:
+        con.close()

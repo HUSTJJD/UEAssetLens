@@ -21,9 +21,10 @@ public class UEAssetLensMCP : ModuleRules
 			"Json",           // FJsonObject DOM + GetInputJsonSchema() (SDK contract)
 			"JsonUtilities",
 			"Projects",
-			// Epic's first-party in-editor MCP server (UE6 Experimental).
-			// The plugin reference in UEAssetLens.uplugin is marked Optional, so
-			// engines without this plugin simply do not build/activate this module.
+			// Epic's first-party in-editor MCP server (UE6 Experimental + NoRedist).
+			// The plugin reference in UEAssetLens.uplugin stays Optional; this
+			// module is development-only and is not redistributed with releases.
+			// Engines without the plugin simply do not build/activate this module.
 			"ModelContextProtocol",
 		});
 	}

@@ -7,8 +7,9 @@
 
 | key | value |
 | --- | --- |
-| schema_version | 2.0 |
+| schema_version | 3.0 |
 | fingerprint_dims | 16 |
+| engine_version | UE6 |
 
 ## assets
 
@@ -39,6 +40,19 @@
 | `target_path` | `VARCHAR NOT NULL` |  |
 | `edge_type` | `VARCHAR NOT NULL` | 'DEPENDS_ON' \| 'CO_OCCURS' |
 | `weight` | `FLOAT DEFAULT 1.0` |  |
+
+## extension_payload
+
+| 列 | 类型 | 说明 |
+| --- | --- | --- |
+| `asset_path` | `VARCHAR NOT NULL` |  |
+| `namespace` | `VARCHAR NOT NULL` |  |
+| `field_name` | `VARCHAR NOT NULL` |  |
+| `value_type` | `VARCHAR NOT NULL` | string\|integer\|number\|boolean\|yaml |
+| `value_text` | `VARCHAR` |  |
+| `value_number` | `DOUBLE` |  |
+| `value_bool` | `BOOLEAN` |  |
+| `provenance` | `VARCHAR NOT NULL` | builtin\|plugin\|project\|user |
 
 ## v_search 投影视图
 

@@ -22,7 +22,20 @@ namespace
 		FString Name;
 		FString Description;
 		TSharedPtr<FJsonObject> InputSchema;
+		FString AccessMode;      // read | write | execute（小写规范值）
+		bool bReadOnlyHint = false;
 	};
+
+	/** 只接受 Epic 约定的三个值；未知 / 缺失按 Execute 处理。 */
+	FString NormalizeAccessMode(const FString& Raw)
+	{
+		const FString Lower = Raw.ToLower();
+		if (Lower == TEXT("read") || Lower == TEXT("write") || Lower == TEXT("execute"))
+		{
+			return Lower;
+		}
+		return FString(TEXT("execute"));
+	}
 
 	bool LoadDescriptors(TArray<FToolDescriptor>& OutDescriptors)
 	{
@@ -52,6 +65,7 @@ namespace
 			return false;
 		}
 
+		TArray<FString> MissingAnnotations;
 		for (const TSharedPtr<FJsonValue>& Value : *Tools)
 		{
 			if (!Value.IsValid())
@@ -77,7 +91,48 @@ namespace
 			{
 				Descriptor.InputSchema = *SchemaObject;
 			}
+
+			// 注释字段在描述符顶层（不是 annotations 子对象）。
+			FString RawAccessMode;
+			const bool bHasAccessMode = Object->TryGetStringField(TEXT("accessMode"), RawAccessMode)
+				&& !RawAccessMode.IsEmpty();
+			const FString LowerAccessMode = RawAccessMode.ToLower();
+			const bool bValidAccessMode = bHasAccessMode &&
+				(LowerAccessMode == TEXT("read") || LowerAccessMode == TEXT("write") ||
+				 LowerAccessMode == TEXT("execute"));
+			Descriptor.AccessMode = bValidAccessMode
+				? NormalizeAccessMode(RawAccessMode)
+				: FString(TEXT("execute"));
+
+			bool bHint = false;
+			bool bHasHint = Object->TryGetBoolField(TEXT("readOnlyHint"), bHint);
+			if (!bHasHint)
+			{
+				FString HintText;
+				bHasHint = Object->TryGetStringField(TEXT("readOnlyHint"), HintText);
+				if (bHasHint)
+				{
+					bHint = HintText.Equals(TEXT("true"), ESearchCase::IgnoreCase);
+				}
+			}
+			// readOnlyHint 只有 Read 允许为 true；缺失按 false。
+			Descriptor.bReadOnlyHint = bHasHint && bHint && Descriptor.AccessMode == TEXT("read");
+
+			if (!bValidAccessMode || !bHasHint)
+			{
+				MissingAnnotations.Add(Descriptor.Name);
+			}
+
 			OutDescriptors.Add(MoveTemp(Descriptor));
+		}
+
+		// 启动时一次性列出缺失 / 非法注释的工具；未标注按 Execute 处理。
+		if (MissingAnnotations.Num() > 0)
+		{
+			const FString MissingList = FString::Join(MissingAnnotations, TEXT(", "));
+			UE_LOGF(LogUALEngineMcp, Warning,
+				"Tools with missing/invalid accessMode or missing readOnlyHint (treated as Execute / readOnlyHint=false): %ls",
+				*MissingList);
 		}
 		return OutDescriptors.Num() > 0;
 	}
@@ -133,7 +188,8 @@ void FUALEngineMcpModule::RegisterTools()
 	for (FToolDescriptor& Descriptor : Descriptors)
 	{
 		TSharedRef<IModelContextProtocolTool> Tool = MakeShared<FUALEngineMcpTool>(
-			MoveTemp(Descriptor.Name), MoveTemp(Descriptor.Description), MoveTemp(Descriptor.InputSchema));
+			MoveTemp(Descriptor.Name), MoveTemp(Descriptor.Description), MoveTemp(Descriptor.InputSchema),
+			MoveTemp(Descriptor.AccessMode), Descriptor.bReadOnlyHint);
 		if (Mcp->AddTool(Tool))
 		{
 			RegisteredTools.Add(Tool);

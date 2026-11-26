@@ -1,9 +1,9 @@
 {
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "2.0.0",
+	"Version": 3,
+	"VersionName": "3.0.0",
 	"FriendlyName": "UEAssetLens",
-	"Description": "Deterministic, offline asset specification indexer. Zero VLM, AssetRegistry-based incremental scan + headless Commandlet, writes asset specs to .ual/index.duckdb.",
+	"Description": "Deterministic, offline UE asset kernel. Zero VLM, AssetRegistry-based incremental scan + headless Commandlet, typed extension payload, runtime tool registry, transaction/diff/GameSpec artifacts.",
 	"Category": "Editor",
 	"CreatedBy": "AnnBuildTools",
 	"EnabledByDefault": true,

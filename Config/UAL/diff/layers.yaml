@@ -1,0 +1,123 @@
+# Declarative five-layer diff contract. This file is data only: the runtime
+# never resolves a callable from it and only applies fixed regex substitutions.
+# Every layer is an offline, deterministic index/text projection. Lens does not
+# load UObjects, raw binaries, UE reflection data, VLM output, cloud resources,
+# GPU resources, or network resources here.
+version: 1
+
+noise_keys: &noise_keys
+  - updated_at
+  - timestamp
+  - revision
+  - session_id
+  - run_id
+  - request_id
+  - random_id
+  - ActorMetaData
+  - FiBData
+
+canonicalization: &canonicalization
+  - kind: regex
+    id: guid
+    pattern: '\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b'
+    replacement: '<guid>'
+  - kind: regex
+    id: timestamp
+    pattern: '\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}\S*'
+    replacement: '<timestamp>'
+  - kind: regex
+    id: local_absolute_path
+    pattern: '(?i)[A-Za-z]:[\\/][^\s]+|/(?:home|Users|tmp|var|mnt)/[^\s]+'
+    replacement: '<local-path>'
+  - kind: regex
+    id: noise_key_lines
+    pattern: '(?im)^\s*(?:updated_at|timestamp|revision|session_id|run_id|request_id|random_id|ActorMetaData|FiBData)\s*:.*$'
+    replacement: ''
+  - kind: regex
+    id: random_id_pairs
+    pattern: '(?i)\b(?:session|run|request|random)[_-]?id\s*[:=]\s*[A-Za-z0-9_-]+'
+    replacement: '<random-id>'
+  - kind: regex
+    id: random_id_tokens
+    pattern: '(?i)\b(?:session|run|request|random)[-_][0-9a-f]{8,}\b'
+    replacement: '<random-id>'
+  - kind: regex
+    id: c1_controls
+    pattern: '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]'
+    replacement: ''
+
+rules:
+  - id: L0
+    description: 'Canonical index metadata projection; no asset loading or raw binary payload.'
+    source: index.metadata
+    kind: fields
+    fields: [asset_path, logical_id, asset_class, parent_class, taxonomy, tokens, content_hash]
+    projection:
+      materialization: index_text
+      loader: none
+      asset_load: false
+      binary_payload: false
+      semantics: deterministic
+      source_metadata: 'Indexed metadata columns already present in the read-only asset index.'
+    canonicalization: *canonicalization
+    noise_keys: *noise_keys
+
+  - id: L1
+    description: 'Deterministic text projection of indexed interface_spec/domain_spec maps; no UE reflection or UObject loading.'
+    source: index.reflection_maps
+    kind: fields
+    fields: [interface_spec, domain_spec]
+    projection:
+      materialization: index_text
+      loader: none
+      asset_load: false
+      binary_payload: false
+      semantics: deterministic
+      source_metadata: 'String-valued index maps; field names are metadata, not runtime reflection results.'
+    canonicalization: *canonicalization
+    noise_keys: *noise_keys
+
+  - id: L2
+    description: 'Canonical reference-edge projection from indexed asset_edges rows; no graph traversal or binary loading.'
+    source: index.asset_edges
+    kind: graph
+    fields: [target_path, edge_type, weight]
+    projection:
+      materialization: index_text
+      loader: none
+      asset_load: false
+      binary_payload: false
+      semantics: deterministic
+      source_metadata: 'Bounded edge rows projected from the read-only index and sorted by stable keys.'
+    canonicalization: *canonicalization
+    noise_keys: *noise_keys
+
+  - id: L3
+    description: 'Canonical YAML-cache text projection; no Blueprint parsing, UE reflection, or raw binary payload.'
+    source: index.yaml_cache
+    kind: text
+    fields: [yaml_cache]
+    projection:
+      materialization: index_text
+      loader: none
+      asset_load: false
+      binary_payload: false
+      semantics: deterministic
+      source_metadata: 'Existing textual yaml_cache column from the read-only index.'
+    canonicalization: *canonicalization
+    noise_keys: *noise_keys
+
+  - id: L4
+    description: 'Canonical digest over normalized L0-L3 index/text projections; no raw binary export or UE SDK loading.'
+    source: canonical.L0..L3
+    kind: digest
+    fields: []
+    projection:
+      materialization: canonical_digest
+      loader: none
+      asset_load: false
+      binary_payload: false
+      semantics: deterministic
+      source_metadata: 'Digest computed from canonicalized index/text payloads already available to Lens.'
+    canonicalization: *canonicalization
+    noise_keys: *noise_keys

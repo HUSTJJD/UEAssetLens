@@ -1,0 +1,478 @@
+# Runtime MCP tool catalog. These tool definitions are data: Tools/gen_docs.py
+# publishes them into tool_schemas.yaml / docs/reference/mcp-tools.md, server.py
+# registers them dynamically with the official MCP SDK 2.x, and engine_bridge.py
+# dispatches them by qualified name. No bare ual_* wire names.
+version: 1
+
+rules:
+  - id: tool.list_extensions
+    namespace: tool
+    name: list_extensions
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_list_extensions
+      mcp_name: UEAssetLens.AssetKernelToolset.ListExtensions
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Bounded snapshot of the nine-namespace extension registry.
+      inputSchema:
+        type: object
+        properties:
+          limit: {type: integer, default: 100, description: Max rows (1..500)}
+        required: []
+
+  - id: tool.get_index_revision
+    namespace: tool
+    name: get_index_revision
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_get_index_revision
+      mcp_name: UEAssetLens.AssetKernelToolset.GetIndexRevision
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Deterministic revision hash of the read-only asset index.
+      inputSchema: {type: object, properties: {}, required: []}
+
+  - id: tool.search_extension_fields
+    namespace: tool
+    name: search_extension_fields
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_search_extension_fields
+      mcp_name: UEAssetLens.AssetKernelToolset.SearchExtensionFields
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Query typed extension_payload fields without dumping raw specs.
+      inputSchema:
+        type: object
+        properties:
+          namespace: {type: string, default: '', description: Extension namespace filter}
+          field_name: {type: string, default: '', description: Field name filter}
+          value_contains: {type: string, default: '', description: Case-insensitive value substring}
+          limit: {type: integer, default: 20, description: Max rows (1..100)}
+        required: []
+
+  - id: tool.list_extension_fields
+    namespace: tool
+    name: list_extension_fields
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_list_extension_fields
+      mcp_name: UEAssetLens.AssetKernelToolset.ListExtensionFields
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Discover typed extension fields and their value types.
+      inputSchema:
+        type: object
+        properties:
+          limit: {type: integer, default: 50, description: Max rows (1..200)}
+        required: []
+
+  - id: tool.get_assembly_graph
+    namespace: tool
+    name: get_assembly_graph
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_get_assembly_graph
+      mcp_name: UEAssetLens.AssetKernelToolset.GetAssemblyGraph
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Resolve declared asset roles and assembly relations.
+      inputSchema:
+        type: object
+        properties:
+          asset_path: {type: string, description: /Game asset path}
+          limit: {type: integer, default: 20, description: Max rows (1..100)}
+        required: [asset_path]
+
+  - id: tool.list_official_tools
+    namespace: tool
+    name: list_official_tools
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_list_official_tools
+      mcp_name: UEAssetLens.AssetKernelToolset.ListOfficialTools
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Bounded official tool whitelist used by the resource gateway.
+      inputSchema:
+        type: object
+        properties:
+          limit: {type: integer, default: 100, description: Max rows (1..500)}
+        required: []
+
+  - id: tool.request_rescan
+    namespace: tool
+    name: request_rescan
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, execute]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_request_rescan
+      mcp_name: UEAssetLens.AssetKernelToolset.RequestRescan
+      accessMode: Execute
+      readOnlyHint: false
+      annotations: {accessMode: Execute, readOnlyHint: false}
+      meta: {accessMode: Execute}
+      description: Enqueue a deterministic incremental rescan request (dry-run default).
+      inputSchema:
+        type: object
+        properties:
+          asset_paths: {type: string, default: '', description: Comma-separated /Game paths}
+          reason: {type: string, default: 'index consistency', description: Audit reason}
+          dry_run: {type: boolean, default: true, description: Only stage the request when true}
+          approved_by: {type: string, default: '', description: Human approver for non-dry-run}
+          approvals: {type: string, default: '', description: Explicit per-op approval id RequestRescan}
+        required: []
+
+  - id: tool.diff_assets
+    namespace: tool
+    name: diff_assets
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read, diff]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_diff_assets
+      mcp_name: UEAssetLens.AssetDiffToolset.DiffAssets
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Produce full five-layer diff artifacts; return only a bounded TOON summary.
+      inputSchema:
+        type: object
+        properties:
+          lhs: {type: string, description: Left /Game asset path}
+          rhs: {type: string, description: Right /Game asset path}
+          layers: {type: string, default: 'L0,L1,L2,L3,L4', description: Comma-separated layer ids}
+        required: [lhs, rhs]
+
+  - id: tool.read_diff_layer
+    namespace: tool
+    name: read_diff_layer
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read, diff]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_read_diff_layer
+      mcp_name: UEAssetLens.AssetDiffToolset.ReadDiffLayer
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Page through one canonical diff artifact layer.
+      inputSchema:
+        type: object
+        properties:
+          diff_id: {type: string, description: Deterministic diff id}
+          layer: {type: string, description: L0..L4}
+          offset: {type: integer, default: 0, description: Line offset}
+          limit: {type: integer, default: 80, description: Max lines (1..200)}
+        required: [diff_id, layer]
+
+  - id: tool.verify_diff_determinism
+    namespace: tool
+    name: verify_diff_determinism
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read, diff]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_verify_diff_determinism
+      mcp_name: UEAssetLens.AssetDiffToolset.VerifyDiffDeterminism
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Rebuild a diff twice and compare canonical artifacts byte-for-byte.
+      inputSchema:
+        type: object
+        properties:
+          diff_id: {type: string, description: Deterministic diff id}
+        required: [diff_id]
+
+  - id: tool.plan_edit
+    namespace: tool
+    name: plan_edit
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read, transaction]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_plan_edit
+      mcp_name: UEAssetLens.AssetEditTransactionToolset.PlanEdit
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Build a deterministic dry-run edit plan with inverse ops and diff preview.
+      inputSchema:
+        type: object
+        properties:
+          intent: {type: string, description: Natural-language change intent}
+          candidates: {type: string, default: '', description: Comma-separated candidate /Game paths}
+          scope: {type: string, default: /Game, description: Allowed scope prefix}
+          max_ops: {type: integer, default: 16, description: Max operations (1..64)}
+          operations: {type: string, default: '', description: Optional YAML operation list}
+        required: [intent]
+
+  - id: tool.apply_plan
+    namespace: tool
+    name: apply_plan
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, write, transaction]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_apply_plan
+      mcp_name: UEAssetLens.AssetEditTransactionToolset.ApplyPlan
+      accessMode: Write
+      readOnlyHint: false
+      annotations: {accessMode: Write, readOnlyHint: false}
+      meta: {accessMode: Write}
+      description: Approve and apply a plan through the official-tool gateway (dry-run default).
+      inputSchema:
+        type: object
+        properties:
+          plan_id: {type: string, description: Deterministic plan id}
+          approved_by: {type: string, default: '', description: Human approver id}
+          dry_run: {type: boolean, default: true, description: Do not execute Write ops when true}
+          approvals: {type: string, default: '', description: Comma-separated approved operation ids}
+        required: [plan_id]
+
+  - id: tool.verify_edit
+    namespace: tool
+    name: verify_edit
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read, transaction]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_verify_edit
+      mcp_name: UEAssetLens.AssetEditTransactionToolset.VerifyEdit
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Verify per-op results and index consistency for a plan.
+      inputSchema:
+        type: object
+        properties:
+          plan_id: {type: string, description: Deterministic plan id}
+        required: [plan_id]
+
+  - id: tool.rollback_edit
+    namespace: tool
+    name: rollback_edit
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, write, transaction]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_rollback_edit
+      mcp_name: UEAssetLens.AssetEditTransactionToolset.RollbackEdit
+      accessMode: Write
+      readOnlyHint: false
+      annotations: {accessMode: Write, readOnlyHint: false}
+      meta: {accessMode: Write}
+      description: Execute a plan's pre-generated inverse operations (dry-run default).
+      inputSchema:
+        type: object
+        properties:
+          plan_id: {type: string, description: Deterministic plan id}
+          approved_by: {type: string, default: '', description: Human approver id}
+          dry_run: {type: boolean, default: true, description: Do not execute Write ops when true}
+          approvals: {type: string, default: '', description: Comma-separated approved inverse operation ids}
+        required: [plan_id]
+
+  - id: tool.expand_gamespec
+    namespace: tool
+    name: expand_gamespec
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read, template]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_expand_gamespec
+      mcp_name: UEAssetLens.GameSpecToolset.ExpandGameSpec
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Deterministically expand a supported intent into a GameSpec and asset plan.
+      inputSchema:
+        type: object
+        properties:
+          intent: {type: string, description: For example, a one-sentence FPS 3C request}
+          template: {type: string, default: fps_3c, description: Template id}
+        required: [intent]
+
+  - id: tool.run_validation_loop
+    namespace: tool
+    name: run_validation_loop
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, execute, validation]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_run_validation_loop
+      mcp_name: UEAssetLens.GameSpecToolset.RunValidationLoop
+      accessMode: Execute
+      readOnlyHint: false
+      annotations: {accessMode: Execute, readOnlyHint: false}
+      meta: {accessMode: Execute}
+      description: Run compile/PIE/snapshot/assert stages through an injected host runner.
+      inputSchema:
+        type: object
+        properties:
+          game_spec_id: {type: string, description: Deterministic GameSpec id}
+          runner: {type: string, default: offline, description: Host runner id}
+          dry_run: {type: boolean, default: true, description: Skip real engine side effects}
+          approved_by: {type: string, default: '', description: Human approver for non-dry-run}
+          approvals: {type: string, default: '', description: Explicit per-op approval id RunValidationLoop}
+        required: [game_spec_id]
+
+  - id: tool.get_lifecycle_events
+    namespace: tool
+    name: get_lifecycle_events
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read, audit]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_get_lifecycle_events
+      mcp_name: UEAssetLens.AssetKernelToolset.GetLifecycleEvents
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Bounded lifecycle / audit event report.
+      inputSchema:
+        type: object
+        properties:
+          limit: {type: integer, default: 50, description: Max rows (1..200)}
+        required: []
+
+  - id: tool.run_fps_3c_workflow
+    namespace: tool
+    name: run_fps_3c_workflow
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, execute, workflow]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_run_fps_3c_workflow
+      mcp_name: UEAssetLens.GameSpecToolset.RunFps3CWorkflow
+      accessMode: Execute
+      readOnlyHint: false
+      annotations: {accessMode: Execute, readOnlyHint: false}
+      meta: {accessMode: Execute}
+      description: Run the bounded offline FPS 3C workflow (dry-run default; no engine writes).
+      inputSchema:
+        type: object
+        properties:
+          intent: {type: string, description: Supported FPS 3C intent}
+          dry_run: {type: boolean, default: true, description: Skip real engine side effects when true}
+          approved_by: {type: string, default: '', description: Human approver for non-dry-run}
+          approvals: {type: string, default: '', description: Explicit per-op approval ids for all workflow operations}
+        required: [intent]
+
+  - id: tool.read_artifact
+    namespace: tool
+    name: read_artifact
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, read, artifact]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_read_artifact
+      mcp_name: UEAssetLens.ArtifactToolset.ReadArtifact
+      accessMode: Read
+      readOnlyHint: true
+      annotations: {accessMode: Read, readOnlyHint: true}
+      meta: {accessMode: Read}
+      description: Page one canonical .ual artifact through the bounded artifact reader.
+      inputSchema:
+        type: object
+        properties:
+          relative: {type: string, description: Repository-relative .ual artifact path}
+          offset: {type: integer, default: 0, description: Canonical artifact line offset}
+          limit: {type: integer, default: 80, description: Max lines (1..200)}
+        required: [relative]
+
+  - id: tool.import_gamespec
+    namespace: tool
+    name: import_gamespec
+    version: '1'
+    priority: 10
+    applies_to: ['*']
+    capabilities: [mcp, write, template, validation]
+    impl: ual_common.extensions_builtins.runtime_tool
+    schema:
+      handler: ual_import_game_spec
+      mcp_name: UEAssetLens.GameSpecToolset.ImportGameSpec
+      accessMode: Write
+      readOnlyHint: false
+      annotations: {accessMode: Write, readOnlyHint: false}
+      meta: {accessMode: Write}
+      description: Validate a structured host GameSpec payload (dry-run default).
+      inputSchema:
+        type: object
+        properties:
+          payload: {type: object, default: {}, description: Structured GameSpec mapping}
+          dry_run: {type: boolean, default: true, description: Skip host side effects when true}
+          approved_by: {type: string, default: '', description: Human approver for non-dry-run}
+          approvals: {type: string, default: '', description: Explicit per-op approval id ImportGameSpec}
+        required: [payload]

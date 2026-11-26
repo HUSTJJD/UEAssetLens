@@ -7,10 +7,19 @@ IDE declarations or sample projects are included. Third-party vendored sources
 that are compile-time requirements (UnLuaNova's Lua / Luau submodules) are
 copied as real files, with their .ubtignore markers preserved.
 
+NoRedist: the dev-only UEAssetLensMCP engine module, any official
+ModelContextProtocol plugin artifacts and a descriptor enabling that optional
+official plugin must never ship. The development UEAssetLens.uplugin is never
+modified; a NoRedist-clean release descriptor is generated in memory from it
+and written into the archive instead.
+
 Usage:
     python Tools/package_plugin.py                  # writes dist/<archive>.zip
     python Tools/package_plugin.py --out-dir DIR
-    python Tools/package_plugin.py --verify-only ZIP
+    python Tools/package_plugin.py --verify-only ZIP_OR_DESCRIPTOR
+
+--verify-only is deterministic and offline: it inspects a zip archive or a
+standalone .uplugin descriptor, without network, clock or random identifiers.
 
 Requires Python 3.8+. No third-party dependencies.
 """
@@ -26,6 +35,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 DIST = REPO / "dist"
+
+# Experimental + NoRedist: dev-only engine module and the optional official
+# plugin are development aids only; neither may appear in a release archive.
+DEV_ONLY_MODULE = "UEAssetLensMCP"
+NOREDIST_OFFICIAL_PLUGIN = "ModelContextProtocol"
 
 # Directory names excluded wherever they appear.
 SKIP_DIR_NAMES = {
@@ -45,15 +59,40 @@ SKIP_SUFFIXES = (".pyc", ".pyo", ".duckdb", ".duckdb.wal", ".parquet",
 # Path prefixes (relative to each plugin source dir) excluded from the archive.
 # NOTE: Content/IntelliSense holds hand-written annotations and IS kept; only
 # the machine-generated top-level IntelliSense/ is dropped.
-SKIP_REL_PREFIXES = []
+# The engine MCP module is a development-only integration with the optional
+# official plugin, so its whole source tree is excluded from release packages.
+SKIP_REL_PREFIXES = ["Source/UEAssetLensMCP/"]
 
 # Extra root-level files copied next to the plugin folders (licences, docs).
 ROOT_FILES = [('LICENSE', 'LICENSE'), ('NOTICE', 'NOTICE'), ('README.md', 'README.md')]
 # Each: (source dir relative to repo root, plugin folder name inside the zip).
 PLUGIN_DIRS = [('.', 'UEAssetLens')]
 DESCRIPTOR = 'UEAssetLens.uplugin'
+RELEASE_DESCRIPTOR_PATHS = {f"{d}/{DESCRIPTOR}" for _, d in PLUGIN_DIRS}
 RELEASE_NAME = 'UEAssetLens'
 REQUIRED_MARKERS = []
+
+# Fixed zip metadata keeps release archives reproducible: no file mtimes,
+# no host-dependent paths or timestamps leak into the archive.
+ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
+
+
+def _norm(name: str) -> str:
+    """Normalize an archive/relative path to forward slashes."""
+    return name.replace("\\", "/")
+
+
+def _segments(name: str) -> list:
+    return [part.lower() for part in _norm(name).split("/") if part]
+
+
+def _is_noredist_path(name: str) -> bool:
+    """True for the dev-only engine MCP module or official plugin artifacts."""
+    return any(
+        NOREDIST_OFFICIAL_PLUGIN.lower() in part
+        or part == DEV_ONLY_MODULE.lower()
+        for part in _segments(name)
+    )
 
 
 def _skip_rel(rel: Path) -> bool:
@@ -64,13 +103,17 @@ def _skip_rel(rel: Path) -> bool:
 
 def iter_files(src: Path, dest: Path):
     for root, dirnames, filenames in os.walk(src):
-        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIR_NAMES)
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in SKIP_DIR_NAMES and not _is_noredist_path(d)
+        )
         rel_root = Path(root).relative_to(src)
         for filename in sorted(filenames):
             if filename in SKIP_FILE_NAMES or filename.endswith(SKIP_SUFFIXES):
                 continue
             rel = rel_root / filename
-            if _skip_rel(rel_root) or _skip_rel(rel):
+            if (_skip_rel(rel_root) or _skip_rel(rel)
+                    or _is_noredist_path(rel.as_posix())):
                 continue
             f = Path(root) / filename
             if f.is_symlink():
@@ -98,6 +141,63 @@ def version_name() -> str:
         return json.load(fh)["VersionName"]
 
 
+def release_descriptor_bytes(src: Path) -> bytes:
+    """Build a NoRedist-clean descriptor without touching the dev .uplugin."""
+    data = json.loads(src.read_text(encoding="utf-8-sig"))
+    if not isinstance(data, dict):
+        raise SystemExit("ERROR: plugin descriptor is not a JSON object")
+    modules = data.get("Modules")
+    if isinstance(modules, list):
+        data["Modules"] = [
+            module for module in modules
+            if not (isinstance(module, dict)
+                    and str(module.get("Name", "")).lower() == DEV_ONLY_MODULE.lower())
+        ]
+    plugins = data.get("Plugins")
+    if isinstance(plugins, list):
+        data["Plugins"] = [
+            plugin for plugin in plugins
+            if not (isinstance(plugin, dict)
+                    and str(plugin.get("Name", "")).lower()
+                    == NOREDIST_OFFICIAL_PLUGIN.lower())
+        ]
+    payload = json.dumps(data, indent="\t", ensure_ascii=False) + "\n"
+    return payload.encode("utf-8")
+
+
+def _iter_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield str(key)
+            yield from _iter_strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _iter_strings(item)
+
+
+def descriptor_violations(text: str, label: str) -> list:
+    """Reject a descriptor that enables the official plugin or the dev module."""
+    try:
+        data = json.loads(text)
+    except (ValueError, TypeError) as exc:
+        return [f"{label}: descriptor is not valid JSON ({type(exc).__name__})"]
+    violations = []
+    for value in _iter_strings(data):
+        lowered = value.lower()
+        if NOREDIST_OFFICIAL_PLUGIN.lower() in lowered:
+            violations.append(
+                f"{label}: descriptor references official NoRedist plugin "
+                f"{NOREDIST_OFFICIAL_PLUGIN}"
+            )
+        if DEV_ONLY_MODULE.lower() in lowered:
+            violations.append(
+                f"{label}: descriptor references dev-only module {DEV_ONLY_MODULE}"
+            )
+    return sorted(set(violations))
+
+
 def validate(names) -> None:
     name_set = set(names)
     for _, dest_name in PLUGIN_DIRS:
@@ -114,22 +214,64 @@ def validate(names) -> None:
            or "/Saved/" in f"/{n}" or "/__pycache__/" in f"/{n}"
            or "/IntelliSense/" in f"/{n}" and "/Content/IntelliSense/" not in f"/{n}"]
     if bad:
-        raise SystemExit("ERROR: forbidden paths in archive:/n  " + "\n  ".join(bad[:10]))
+        raise SystemExit("ERROR: forbidden paths in archive:\n  "
+                         + "\n  ".join(bad[:10]))
+    noredist = [n for n in names if _is_noredist_path(n)]
+    if noredist:
+        raise SystemExit("ERROR: NoRedist paths in archive:\n  "
+                         + "\n  ".join(noredist[:10]))
+
+
+def verify_only(path: Path) -> int:
+    """Offline, deterministic NoRedist check of an archive or a descriptor."""
+    violations = []
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as zf:
+            names = zf.namelist()
+            validate(names)
+            for name in names:
+                if _norm(name).endswith(".uplugin"):
+                    try:
+                        text = zf.read(name).decode("utf-8-sig")
+                    except (KeyError, UnicodeDecodeError):
+                        violations.append(f"{name}: descriptor is not UTF-8 text")
+                        continue
+                    violations.extend(descriptor_violations(text, name))
+            count = len(names)
+    else:
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+        except OSError as exc:
+            raise SystemExit(
+                f"ERROR: cannot read {path.name}: {type(exc).__name__}"
+            )
+        violations.extend(descriptor_violations(text, path.name))
+        count = 1
+    if violations:
+        raise SystemExit("ERROR: NoRedist violations:\n  "
+                         + "\n  ".join(sorted(set(violations))[:10]))
+    return count
+
+
+def _write_entry(zf: zipfile.ZipFile, name: str, data: bytes) -> None:
+    info = zipfile.ZipInfo(name, date_time=ZIP_EPOCH)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.create_system = 3
+    info.external_attr = 0o644 << 16
+    zf.writestr(info, data)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out-dir", default=str(DIST))
-    ap.add_argument("--verify-only", metavar="ZIP")
+    ap.add_argument("--verify-only", metavar="ZIP_OR_DESCRIPTOR")
     args = ap.parse_args()
 
     if args.verify_only:
         z = Path(args.verify_only)
-        with zipfile.ZipFile(z) as zf:
-            names = zf.namelist()
-        validate(names)
-        print(f"OK {z.name}: {len(names)} entries, "
-              f"sha256={hashlib.sha256(z.read_bytes()).hexdigest()}")
+        count = verify_only(z)
+        digest = hashlib.sha256(z.read_bytes()).hexdigest()
+        print(f"OK {z.name}: {count} entries, sha256={digest}")
         return 0
 
     entries = collect()
@@ -142,8 +284,13 @@ def main() -> int:
         archive.unlink()
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         for src, dest in entries:
-            zf.write(src, dest.as_posix())
+            name = dest.as_posix()
+            if name in RELEASE_DESCRIPTOR_PATHS:
+                _write_entry(zf, name, release_descriptor_bytes(src))
+            else:
+                _write_entry(zf, name, src.read_bytes())
 
+    verify_only(archive)
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     (out_dir / f"{archive.name}.sha256").write_text(
         f"{digest}  {archive.name}\n", encoding="utf-8")

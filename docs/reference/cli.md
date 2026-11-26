@@ -16,7 +16,7 @@ Build/update the DuckDB index
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `--project` |  |  | UE project root |
-| `--engine-cmd` |  |  | Path to UnrealEditor-Cmd.exe |
+| `--engine-cmd` |  |  | Path to UnrealEditor.exe |
 | `--from-yaml` |  |  | Ingest a Commandlet YAML document stream |
 | `--demo` | `flag` |  | Ingest bundled demo seed (no UE required) |
 | `--incremental` | `flag` |  | Skip unchanged content_hash |
@@ -27,8 +27,15 @@ Cosine self-join duplicate gate
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
+| `--project` |  |  | UE project root for team/user preference layers |
 | `--threshold` | `float` | `0.85` |  |
 | `--diff-only` | `flag` |  | Only assets added in this Git change |
+| `--limit` | `int` | `100` | Max audit rows and allowlist issues |
+| `--allowlist-project` |  |  | Project root for allowlist preference layers |
+| `--as-of` |  |  | ISO review date for allowlist expiry |
+| `--approved-by` |  |  | Review-gated allowlist approver |
+| `--review-ref` |  |  | Review-gated allowlist reference |
+| `--strict-allowlist` | `flag` |  | Block on invalid, expired or unreviewed allowlist entries |
 
 ## `lint-policy`
 
@@ -48,8 +55,14 @@ Validate asset references in configs/scripts
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `--scan-dirs` |  | `Content/Abilities,Content/Script` |  |
 | `--project` |  |  | Root for relative scan dirs |
+| `--scan-dirs` |  | `Content/Abilities,Content/Script` |  |
+| `--limit` | `int` | `100` | Max findings and allowlist issues |
+| `--allowlist-project` |  |  | Project root for allowlist preference layers |
+| `--as-of` |  |  | ISO review date for allowlist expiry |
+| `--approved-by` |  |  | Review-gated allowlist approver |
+| `--review-ref` |  |  | Review-gated allowlist reference |
+| `--strict-allowlist` | `flag` |  | Block on invalid, expired or unreviewed allowlist entries |
 
 ## `export-parquet`
 
@@ -57,7 +70,259 @@ Export catalog as Parquet
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
+| `--project` |  |  | Root used to label the output artifact |
 | `--out` |  | `.ual/shared_catalog.parquet` |  |
+
+## `list-extensions`
+
+Bounded extension registry snapshot
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--limit` | `int` | `100` | Max rows (1..500) |
+
+## `list-extension-fields`
+
+Typed extension field catalog
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--limit` | `int` | `50` | Max rows (1..200) |
+
+## `search-extension-fields`
+
+Search typed extension_payload rows
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--namespace` |  |  | Extension namespace filter |
+| `--field-name` |  |  | Field name filter |
+| `--value-contains` |  |  | Case-insensitive value substring |
+| `--limit` | `int` | `20` | Max rows (1..100) |
+
+## `get-assembly-graph`
+
+Resolve declared asset roles and assembly relations
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--asset-path` |  |  | /Game asset path |
+| `--limit` | `int` | `20` | Max rows (1..100) |
+
+## `list-official-tools`
+
+Bounded official tool whitelist
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--limit` | `int` | `100` | Max rows (1..500) |
+
+## `get-index-revision`
+
+Deterministic read-only index revision
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+
+## `get-lifecycle-events`
+
+Bounded lifecycle audit events
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--limit` | `int` | `50` | Max rows (1..200) |
+
+## `allowlist-audit`
+
+Bounded allowlist validation and review report
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | UE project root |
+| `--allowlist-project` |  |  | Override project root for allowlist layers |
+| `--as-of` |  |  | ISO review date for allowlist expiry |
+| `--approved-by` |  |  | Review-gated allowlist approver |
+| `--review-ref` |  |  | Review-gated allowlist reference |
+| `--strict-allowlist` | `flag` |  | Return nonzero when allowlist issues exist |
+| `--limit` | `int` | `100` | Max issue rows (1..200) |
+
+## `diff-assets`
+
+Build five-layer canonical diff artifacts
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--lhs` |  |  | Left /Game asset path |
+| `--rhs` |  |  | Right /Game asset path |
+| `--layers` |  | `L0,L1,L2,L3,L4` | Comma-separated layer ids |
+
+## `read-diff-layer`
+
+Page one canonical diff layer
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--diff-id` |  |  | Deterministic diff id |
+| `--layer` |  |  | L0..L4 |
+| `--offset` | `int` | `0` | Line offset |
+| `--limit` | `int` | `80` | Max lines (1..200) |
+
+## `verify-diff`
+
+Verify canonical diff determinism
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--diff-id` |  |  | Deterministic diff id |
+
+## `plan-edit`
+
+Build a deterministic dry-run edit plan
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--intent` |  |  | Natural-language change intent |
+| `--candidates` |  |  | Comma-separated candidate /Game paths |
+| `--scope` |  | `/Game` | Allowed scope prefix |
+| `--max-ops` | `int` | `16` | Max operations (1..64) |
+| `--operations-file` |  |  | Optional YAML operation list |
+
+## `apply-plan`
+
+Approve and dry-run an edit plan
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--plan-id` |  |  | Deterministic plan id |
+| `--approved-by` |  |  | Human approver id |
+| `--approvals` |  |  | Comma-separated approved operation ids |
+| `--dry-run` |  | `True` | Do not execute Write ops when enabled |
+
+## `verify-edit`
+
+Verify per-op plan results and index consistency
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--plan-id` |  |  | Deterministic plan id |
+
+## `rollback-edit`
+
+Dry-run the plan's inverse operations
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--plan-id` |  |  | Deterministic plan id |
+| `--approved-by` |  |  | Human approver id |
+| `--approvals` |  |  | Comma-separated approved inverse operation ids |
+| `--dry-run` |  | `True` | Do not execute Write ops when enabled |
+
+## `expand-gamespec`
+
+Expand a declarative GameSpec template
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--intent` |  |  | Supported FPS 3C intent |
+| `--template` |  | `fps_3c` | Template id |
+
+## `run-validation-loop`
+
+Run bounded offline validation stages
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--game-spec-id` |  |  | Deterministic GameSpec id |
+| `--runner` |  | `offline` | Host runner id |
+| `--dry-run` |  | `True` | Skip real engine side effects |
+| `--approved-by` |  |  | Human approver for non-dry-run |
+| `--approvals` |  |  | Explicit per-op approval id RunValidationLoop |
+
+## `run-workflow`
+
+Run the ten-step offline FPS 3C workflow
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--intent` |  |  | Supported FPS 3C intent |
+| `--dry-run` |  | `True` | Skip real engine side effects |
+| `--approved-by` |  |  | Human approver for non-dry-run |
+| `--approvals` |  |  | Explicit per-op approval ids for all workflow operations |
+
+## `request-rescan`
+
+Stage a deterministic incremental rescan request
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--asset-paths` |  |  | Comma-separated /Game paths |
+| `--reason` |  | `index consistency` | Audit reason |
+| `--dry-run` |  | `True` | Only stage the rescan request when enabled |
+| `--approved-by` |  |  | Human approver for non-dry-run |
+| `--approvals` |  |  | Explicit per-op approval id RequestRescan |
+
+## `read-artifact`
+
+Page one canonical .ual artifact as bounded TOON
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--relative` |  |  | Repository-relative .ual artifact path |
+| `--offset` | `int` | `0` | Canonical artifact line offset |
+| `--limit` | `int` | `80` | Max lines (1..200) |
+
+## `import-gamespec`
+
+Validate a structured host GameSpec payload
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | Artifact root for runtime tools |
+| `--payload` |  |  | Inline structured GameSpec YAML |
+| `--payload-file` |  |  | Repository-relative structured GameSpec YAML file |
+| `--dry-run` |  | `True` | Skip host side effects when enabled |
+| `--approved-by` |  |  | Human approver for non-dry-run |
+| `--approvals` |  |  | Explicit per-op approval id ImportGameSpec |
+
+## `apply-events`
+
+Apply canonical staging event streams to DuckDB
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | UE project root containing .ual/staging |
+| `--events` |  | `DEFAULT_EVENTS` | Repository-relative 16-key event stream |
+| `--removed` |  | `DEFAULT_REMOVED` | Repository-relative removed stream |
+
+## `benchmark`
+
+Run the offline DuckDB index benchmark
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--project` |  |  | UE project root |
+| `--count` | `int` | `10000` | Synthetic asset count (1..100000) |
+| `--incremental` | `flag` |  | Measure an unchanged incremental pass |
+| `--dry-run` | `flag` | `True` | Offline benchmark has no real writes |
 
 ## `self-test`
 

@@ -2,7 +2,7 @@ version: 1
 root: "Asset"
 fallback: "Misc"
 case_sensitive: true
-_comment: "Single source of truth for asset taxonomy. Ordered: the FIRST family whose match substrings appear in the asset class wins. Python (ual_common/taxonomy.py) and C++ (UALTaxonomyRules.h, produced by Tools/gen_taxonomy.py) both read this file. Adding a new UE asset type family only requires an entry here, then regenerating the C++ header."
+_comment: "Single source of truth for asset taxonomy and feature extraction rules. Ordered: the FIRST family whose match substrings appear in the asset class wins. Python (ual_common/taxonomy.py) reads 'families'; Tools/gen_taxonomy.py renders UALTaxonomyRules.h, UALFeatureProfiles.h and UALDomainProfiles.h from families, profiles, capability_rules, prefixes and domain_profiles. Adding a new UE asset type family requires a 'families' entry AND a 'profiles' entry; adding a fields-config family requires a 'domain_profiles' entry. The generator rejects incomplete coverage and regenerates all three C++ headers; --check enforces all three. No tool may keep a second hardcoded copy of these rules."
 families:
   - name: "Texture"
     match: ["Texture", "RenderTarget", "Cubemap", "CubeMap", "LightMap", "ShadowMap", "VolumeTexture", "TextureAtlas"]
@@ -52,3 +52,138 @@ families:
     match: ["Lua", "UnLua", "Script", "PythonScript"]
   - name: "Verse"
     match: ["Verse"]
+
+# '|' separated AssetRegistry Tag *name* fragments. Matched case-insensitively as
+# substrings by FUALTypedFeatureExtractor, which never loads the asset. One rule
+# per family plus one for the fallback family; the generator enforces coverage.
+profiles:
+  default: "ParentClass|GeneratedClass|BoundsSize|Duration|Skeleton"
+  rules:
+    - family: "Texture"
+      keys: "SizeX|SizeY|Format|Compression|SRGB|LODGroup|Mip|Address|PixelFormat|NeverStream"
+    - family: "Material"
+      keys: "Parent|BlendMode|ShadingModel|UsedTextures|Parameter|TwoSided|MaterialDomain|Expression"
+    - family: "Animation"
+      keys: "SequenceLength|FrameRate|NumFrames|Skeleton|RootMotion|Notif|Curve|Additive|Loop"
+    - family: "Mesh"
+      keys: "Triangle|Vertex|LOD|Material|Socket|Nanite|Bounds|Skeleton|Collision|UV"
+    - family: "Audio"
+      keys: "Duration|SampleRate|Channel|Compression|Loop|Quality|SoundClass|Submix|Attenuation"
+    - family: "Blueprint"
+      keys: "ParentClass|GeneratedClass|BlueprintType|Interface|Variable|Function|Component"
+    - family: "UI"
+      keys: "ParentClass|Widget|Design|Visibility|Binding|Layout"
+    - family: "VFX"
+      keys: "Emitter|System|Parameter|GPU|Simulation|Renderer|Spawn|Module"
+    - family: "Data"
+      keys: "RowStruct|RowCount|Column|Curve|Import|KeyField"
+    - family: "Cinematic"
+      keys: "SequenceLength|Track|Binding|FrameRate|Camera|Section"
+    - family: "Physics"
+      keys: "Body|Constraint|Skeleton|Collision|Mass|Shape"
+    - family: "AI"
+      keys: "Blackboard|Node|Behavior|State|EQS|Perception"
+    - family: "Gameplay"
+      keys: "ParentClass|Tag|Ability|Effect|Attribute|GameplayCue"
+    - family: "PCG"
+      keys: "Graph|Node|Parameter|Spline|Point"
+    - family: "Groom"
+      keys: "Strand|Hair|LOD|Material|Simulation"
+    - family: "Geometry"
+      keys: "Bounds|Vertex|Triangle|Cache|Frame"
+    - family: "Media"
+      keys: "URL|Source|Player|Texture|Duration"
+    - family: "World"
+      keys: "Level|Actor|Streaming|Landscape|Light|World"
+    - family: "Text"
+      keys: "Font|String|Size|Face|Table"
+    - family: "Rendering"
+      keys: "Capture|Reflection|Light|Exposure|Profile"
+    - family: "Editor"
+      keys: "Settings|Config|Developer|Tool"
+    - family: "Network"
+      keys: "Replication|Net|Channel|RPC"
+    - family: "Scripting"
+      keys: "Script|Lua|Class|Module"
+    - family: "Verse"
+      keys: "Verse|Script|Module"
+    - family: "Misc"
+      keys: "ParentClass|GeneratedClass|BoundsSize|Duration|Skeleton|RowCount|SizeX"
+
+# Capability tags are derived from Tag *names* only; order fixes the emitted
+# feature.capabilities order.
+capability_rules:
+  - name: "has_bounds"
+    tag_fragment: "Bounds"
+  - name: "has_skeleton"
+    tag_fragment: "Skeleton"
+  - name: "has_duration"
+    tag_fragment: "Duration"
+  - name: "has_parent"
+    tag_fragment: "ParentClass"
+  - name: "has_material"
+    tag_fragment: "Material"
+  - name: "has_curve"
+    tag_fragment: "Curve"
+  - name: "has_socket"
+    tag_fragment: "Socket"
+  - name: "has_lod"
+    tag_fragment: "LOD"
+
+# Declarative M2 domain profiles: one rule per Config/UAL/fields/default.yaml
+# family. AppliesTo (including the common '*' wildcard) and field specs come
+# from that fields config; tag_fragments mirror the corresponding profiles rule.
+domain_profiles:
+  version: 1
+  rules:
+    - family: "common"
+      taxonomy_family: "Misc"
+      key_prefix: "domain.common"
+      tag_fragments: "ParentClass|GeneratedClass|BoundsSize|Duration|Skeleton|RowCount|SizeX"
+      priority: 0
+    - family: "static_mesh"
+      taxonomy_family: "Mesh"
+      key_prefix: "domain.mesh"
+      tag_fragments: "Triangle|Vertex|LOD|Material|Socket|Nanite|Bounds|Skeleton|Collision|UV"
+      priority: 20
+    - family: "anim_montage"
+      taxonomy_family: "Animation"
+      key_prefix: "domain.animation"
+      tag_fragments: "SequenceLength|FrameRate|NumFrames|Skeleton|RootMotion|Notif|Curve|Additive|Loop"
+      priority: 20
+    - family: "material"
+      taxonomy_family: "Material"
+      key_prefix: "domain.material"
+      tag_fragments: "Parent|BlendMode|ShadingModel|UsedTextures|Parameter|TwoSided|MaterialDomain|Expression"
+      priority: 20
+    - family: "blueprint"
+      taxonomy_family: "Blueprint"
+      key_prefix: "domain.blueprint"
+      tag_fragments: "ParentClass|GeneratedClass|BlueprintType|Interface|Variable|Function|Component"
+      priority: 20
+    - family: "data_table"
+      taxonomy_family: "Data"
+      key_prefix: "domain.data"
+      tag_fragments: "RowStruct|RowCount|Column|Curve|Import|KeyField"
+      priority: 20
+
+# Common UE naming prefixes, stripped case-sensitively by StripPrefix. The order
+# reproduces the previous hard-coded table exactly (deterministic ordering).
+prefixes:
+  - "SM_"
+  - "SK_"
+  - "AM_"
+  - "A_"
+  - "T_"
+  - "MI_"
+  - "M_"
+  - "BP_"
+  - "WBP_"
+  - "ABP_"
+  - "NS_"
+  - "PS_"
+  - "DA_"
+  - "AC_"
+  - "W_"
+  - "S_"
+  - "B_"

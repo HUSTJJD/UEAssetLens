@@ -1,4 +1,7 @@
--- UEAssetLens (UAL) DuckDB storage schema, v2.0
+-- UEAssetLens (UAL) DuckDB storage schema, v3.0
+-- v3.0 keeps the 16-key Core Record frozen and adds a separate typed
+-- extension_payload table (Phase 1). Four-place contract sync:
+--   PROTOCOL.md, init.sql, UALTypes.h, db.py.
 -- Verified against DuckDB 2.0.0 on 2026-11-15:
 --   FLOAT[3] / FLOAT[16] fixed arrays, VARCHAR[] lists, MAP(VARCHAR,VARCHAR),
 --   PRAGMA create_fts_index and array_cosine_similarity() all work.
@@ -15,8 +18,9 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     key         VARCHAR PRIMARY KEY,
     value       VARCHAR NOT NULL
 );
-INSERT OR REPLACE INTO schema_meta VALUES ('schema_version', '2.0');
+INSERT OR REPLACE INTO schema_meta VALUES ('schema_version', '3.0');
 INSERT OR REPLACE INTO schema_meta VALUES ('fingerprint_dims', '16');
+INSERT OR REPLACE INTO schema_meta VALUES ('engine_version', 'UE6');
 
 -- 1. Main asset spec + deterministic fingerprint table.
 CREATE TABLE IF NOT EXISTS assets (
@@ -60,6 +64,23 @@ CREATE TABLE IF NOT EXISTS asset_edges (
     PRIMARY KEY (source_path, target_path, edge_type)
 );
 CREATE INDEX IF NOT EXISTS idx_edges_source ON asset_edges(source_path, edge_type);
+
+-- 2a. Typed extension payload (Phase 1). The Core Record above stays exactly
+-- 16 staging keys. Field specs come from Config/UAL/extensions/*.yaml; values
+-- are projected from existing MAP columns, never from a 17th staging key.
+-- No updated_at / timestamp / local absolute path / random id is stored here.
+CREATE TABLE IF NOT EXISTS extension_payload (
+    asset_path        VARCHAR NOT NULL,
+    namespace         VARCHAR NOT NULL,
+    field_name        VARCHAR NOT NULL,
+    value_type        VARCHAR NOT NULL,            -- string|integer|number|boolean|yaml
+    value_text        VARCHAR,
+    value_number      DOUBLE,
+    value_bool        BOOLEAN,
+    provenance        VARCHAR NOT NULL,            -- builtin|plugin|project|user
+    PRIMARY KEY (asset_path, namespace, field_name)
+);
+CREATE INDEX IF NOT EXISTS idx_extension_field ON extension_payload(namespace, field_name);
 
 -- 2b. Search projection. forward_cm / strike_window live in domain_spec as
 -- serialized strings; this view exposes them as filterable columns so the

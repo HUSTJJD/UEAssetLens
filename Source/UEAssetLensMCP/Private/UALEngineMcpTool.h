@@ -8,15 +8,20 @@
 /**
  * One UAL tool exposed through Epic's in-editor MCP server.
  *
- * Name / description / inputSchema all come from Server/ual_mcp/tool_schemas.yaml,
- * which is generated from TOOL_DEFS - the same contract used by the Python
- * stdio server and the generated reference docs. This keeps all three frontends
- * from drifting apart. The DOM stays FJsonObject (SDK-mandated signatures).
+ * Name / description / inputSchema / accessMode / readOnlyHint all come from
+ * Server/ual_mcp/tool_schemas.yaml (generated from TOOL_DEFS), the same contract
+ * used by the Python stdio server and the generated reference docs. This keeps
+ * all three frontends from drifting apart. The DOM stays FJsonObject
+ * (SDK-mandated signatures).
+ *
+ * Annotations are descriptor-driven: missing or unknown accessMode defaults to
+ * "execute" with readOnlyHint=false (unannotated tools are treated as Execute).
  */
 class FUALEngineMcpTool : public IModelContextProtocolTool
 {
 public:
-	FUALEngineMcpTool(FString InName, FString InDescription, TSharedPtr<FJsonObject> InInputSchema);
+	FUALEngineMcpTool(FString InName, FString InDescription, TSharedPtr<FJsonObject> InInputSchema,
+		FString InAccessMode = FString(TEXT("execute")), bool bInReadOnlyHint = false);
 
 	virtual FString GetName() const override { return Name; }
 	virtual FString GetDescription() const override { return Description; }
@@ -36,4 +41,6 @@ private:
 	FString Name;
 	FString Description;
 	TSharedPtr<FJsonObject> InputSchema;
+	FString AccessMode;   // read | write | execute
+	bool bReadOnlyHint;
 };

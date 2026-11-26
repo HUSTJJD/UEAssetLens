@@ -1,0 +1,291 @@
+# Declarative gateway-role manifest for the P1/P2 integration boundary.
+# No `tool` namespace entries are defined here, so the MCP tool count is unchanged.
+# External P1/P2 specs are top-level disabled, license-reviewed, Zero-VLM
+# boundary records and are never executed or resolved to an executor. The two
+# local deterministic offline integrations are explicitly enabled.
+version: 1
+
+rules:
+  - id: gateway.integration.comfyui
+    namespace: gateway
+    name: comfyui_spec
+    enabled: false
+    license: GPL-3.0
+    license_review: reviewed
+    zero_vlm_boundary: true
+    executed_by_ual: false
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    allow_executor_injection: false
+    version: '1'
+    priority: 30
+    applies_to: ['*']
+    capabilities: [spec, boundary, external_disabled]
+    config:
+      enabled: false
+      license: GPL-3.0
+      requires_gpu: true
+      requires_cloud: false
+      requires_vlm: true
+      requires_network: false
+      status: 规格
+      process_isolation: true
+      phase: P1
+      source: Config/UAL/gateway/integrations.yaml
+      executed_by_ual: false
+      redistributed_by_ual: false
+      invoked_by_ual: false
+      default_status: specification_only
+      reason: "GPL-3.0 external image generation needs process isolation and is disabled by Zero-VLM."
+    schema:
+      enabled: false
+      license: GPL-3.0
+      requires_gpu: true
+      requires_cloud: false
+      requires_vlm: true
+      status: 规格
+      process_isolation: true
+      phase: P1
+      source: Config/UAL/gateway/integrations.yaml
+      asset_type_roles: [surface, vfx, ui]
+      reason: "Specification only; UAL does not execute or redistribute external generative services."
+
+  - id: gateway.integration.trellis
+    namespace: gateway
+    name: trellis_spec
+    enabled: false
+    license: MIT
+    license_review: reviewed
+    zero_vlm_boundary: true
+    executed_by_ual: false
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    allow_executor_injection: false
+    version: '1'
+    priority: 30
+    applies_to: ['*']
+    capabilities: [spec, boundary, external_disabled]
+    config:
+      enabled: false
+      license: MIT
+      requires_gpu: true
+      requires_cloud: false
+      requires_vlm: true
+      requires_network: false
+      status: 规格
+      process_isolation: true
+      phase: P1
+      source: Config/UAL/gateway/integrations.yaml
+      executed_by_ual: false
+      redistributed_by_ual: false
+      invoked_by_ual: false
+      default_status: specification_only
+      reason: "External text-to-3D generation needs GPU isolation and is disabled by Zero-VLM."
+    schema:
+      enabled: false
+      license: MIT
+      requires_gpu: true
+      requires_cloud: false
+      requires_vlm: true
+      status: 规格
+      process_isolation: true
+      phase: P1
+      source: Config/UAL/gateway/integrations.yaml
+      asset_type_roles: [prop, character, surface]
+      reason: "Specification only; UAL does not execute or redistribute external generative services."
+
+  - id: gateway.integration.audiocraft
+    namespace: gateway
+    name: audiocraft_spec
+    enabled: false
+    license: MIT
+    license_review: reviewed
+    zero_vlm_boundary: true
+    executed_by_ual: false
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    allow_executor_injection: false
+    version: '1'
+    priority: 30
+    applies_to: ['*']
+    capabilities: [spec, boundary, external_disabled]
+    config:
+      enabled: false
+      license: MIT
+      requires_gpu: true
+      requires_cloud: false
+      requires_vlm: false
+      requires_network: false
+      status: 规格
+      process_isolation: true
+      phase: P1
+      source: Config/UAL/gateway/integrations.yaml
+      executed_by_ual: false
+      redistributed_by_ual: false
+      invoked_by_ual: false
+      default_status: specification_only
+      reason: "External music generation needs model weights and process isolation; UAL keeps it disabled."
+    schema:
+      enabled: false
+      license: MIT
+      requires_gpu: true
+      requires_cloud: false
+      requires_vlm: false
+      status: 规格
+      process_isolation: true
+      phase: P1
+      source: Config/UAL/gateway/integrations.yaml
+      asset_type_roles: [audio, vfx, animation]
+      reason: "Specification only; UAL does not execute or redistribute external generative services."
+
+  - id: gateway.integration.unirig_pipeline
+    namespace: gateway
+    name: unirig_pipeline_spec
+    enabled: false
+    license: license_review_required
+    license_review: required
+    zero_vlm_boundary: true
+    executed_by_ual: false
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    allow_executor_injection: false
+    version: '1'
+    priority: 30
+    applies_to: ['*']
+    capabilities: [spec, boundary, external_disabled, license_review]
+    config:
+      enabled: false
+      license: license_review_required
+      requires_gpu: true
+      requires_cloud: false
+      requires_vlm: false
+      requires_network: false
+      status: 规格
+      process_isolation: true
+      phase: P2
+      source: Config/UAL/gateway/integrations.yaml
+      executed_by_ual: false
+      redistributed_by_ual: false
+      invoked_by_ual: false
+      default_status: specification_only
+      reason: "UniRig with Blender and Interchange needs license review before any implementation."
+    schema:
+      enabled: false
+      license: license_review_required
+      requires_gpu: true
+      requires_cloud: false
+      requires_vlm: false
+      status: 规格
+      process_isolation: true
+      phase: P2
+      source: Config/UAL/gateway/integrations.yaml
+      asset_type_roles: [character, animation, locomotion]
+      reason: "Specification only; UAL does not execute or redistribute external generative services."
+
+  - id: gateway.integration.offline_agent_orchestration
+    namespace: gateway
+    name: offline_agent_orchestration
+    enabled: true
+    license: UAL project
+    license_review: not_required
+    zero_vlm_boundary: true
+    executed_by_ual: true
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    allow_executor_injection: false
+    requires_gpu: false
+    requires_cloud: false
+    requires_vlm: false
+    requires_network: false
+    version: '1'
+    priority: 80
+    applies_to: ['*']
+    capabilities: [offline, implemented, workflow]
+    impl: ual_common.extensions_builtins.official_gateway
+    config:
+      enabled: true
+      license: UAL project
+      requires_gpu: false
+      requires_cloud: false
+      requires_vlm: false
+      requires_network: false
+      status: 已实现
+      process_isolation: false
+      phase: P1
+      source: Server/ual_common/workflow.py
+      executed_by_ual: true
+      redistributed_by_ual: false
+      invoked_by_ual: false
+      default_status: deferred_offline
+      allow_executor_injection: false
+      reason: "Deterministic offline FPS 3C workflow; no GPU, cloud, VLM or network."
+    schema:
+      enabled: true
+      license: UAL project
+      requires_gpu: false
+      requires_cloud: false
+      requires_vlm: false
+      status: 已实现
+      process_isolation: false
+      phase: P1
+      source: Server/ual_common/workflow.py
+      asset_type_roles: [character, animation, locomotion, gameplay, ui, audio, vfx, prop, surface]
+      reason: "Offline UAL workflow is implemented and uses bounded TOON output."
+
+  - id: gateway.integration.runtime_tool_audit
+    namespace: gateway
+    name: runtime_tool_audit
+    enabled: true
+    license: UAL project
+    license_review: not_required
+    zero_vlm_boundary: true
+    executed_by_ual: true
+    redistributed_by_ual: false
+    invoked_by_ual: false
+    allow_executor_injection: false
+    requires_gpu: false
+    requires_cloud: false
+    requires_vlm: false
+    requires_network: false
+    version: '1'
+    priority: 80
+    applies_to: ['*']
+    capabilities: [offline, implemented, audit]
+    impl: ual_common.extensions_builtins.official_gateway
+    config:
+      enabled: true
+      license: UAL project
+      requires_gpu: false
+      requires_cloud: false
+      requires_vlm: false
+      requires_network: false
+      status: 已实现
+      process_isolation: false
+      phase: P1
+      source: Tools/audit_engine_toolsets.py
+      executed_by_ual: true
+      redistributed_by_ual: false
+      invoked_by_ual: false
+      default_status: deferred_offline
+      allow_executor_injection: false
+      no_redist: true
+      loopback_only: true
+      auth: false
+      non_loopback_exposure: false
+      reason: "Offline tool contract audit; optional tools/list access is loopback only."
+    schema:
+      enabled: true
+      license: UAL project
+      requires_gpu: false
+      requires_cloud: false
+      requires_vlm: false
+      status: 已实现
+      process_isolation: false
+      phase: P1
+      source: Tools/audit_engine_toolsets.py
+      asset_type_roles: [toolset, contract, audit]
+      no_redist: true
+      loopback_only: true
+      auth: false
+      non_loopback_exposure: false
+      reason: "Offline UAL audit is implemented and emits bounded TOON."

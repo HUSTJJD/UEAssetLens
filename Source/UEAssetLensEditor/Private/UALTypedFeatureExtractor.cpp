@@ -1,6 +1,7 @@
 #include "UALTypedFeatureExtractor.h"
 
 #include "FUniversalReflectionExtractor.h"
+#include "UALFeatureProfiles.h"
 #include "UALTaxonomyRules.h"
 #include "UALTypes.h"
 
@@ -10,60 +11,11 @@ DEFINE_LOG_CATEGORY_STATIC(LogUALTypedFeatures, Log, All);
 
 namespace
 {
-	struct FFeatureProfileRule
-	{
-		const TCHAR* Family;
-		// '|' separated Tag-name fragments; matched case-insensitively as substrings.
-		const TCHAR* Keys;
-	};
-
-	// One profile per taxonomy family. These are AssetRegistry Tag *names*, not
-	// loaded UObject properties, so the extractor stays strictly zero-load.
-	static const FFeatureProfileRule GProfileRules[] = {
-		{ TEXT("Texture"),   TEXT("SizeX|SizeY|Format|Compression|SRGB|LODGroup|Mip|Address|PixelFormat|NeverStream") },
-		{ TEXT("Material"),  TEXT("Parent|BlendMode|ShadingModel|UsedTextures|Parameter|TwoSided|MaterialDomain|Expression") },
-		{ TEXT("Animation"), TEXT("SequenceLength|FrameRate|NumFrames|Skeleton|RootMotion|Notif|Curve|Additive|Loop") },
-		{ TEXT("Mesh"),      TEXT("Triangle|Vertex|LOD|Material|Socket|Nanite|Bounds|Skeleton|Collision|UV") },
-		{ TEXT("Audio"),     TEXT("Duration|SampleRate|Channel|Compression|Loop|Quality|SoundClass|Submix|Attenuation") },
-		{ TEXT("Blueprint"), TEXT("ParentClass|GeneratedClass|BlueprintType|Interface|Variable|Function|Component") },
-		{ TEXT("UI"),        TEXT("ParentClass|Widget|Design|Visibility|Binding|Layout") },
-		{ TEXT("VFX"),       TEXT("Emitter|System|Parameter|GPU|Simulation|Renderer|Spawn|Module") },
-		{ TEXT("Data"),      TEXT("RowStruct|RowCount|Column|Curve|Import|KeyField") },
-		{ TEXT("Cinematic"), TEXT("SequenceLength|Track|Binding|FrameRate|Camera|Section") },
-		{ TEXT("Physics"),   TEXT("Body|Constraint|Skeleton|Collision|Mass|Shape") },
-		{ TEXT("AI"),        TEXT("Blackboard|Node|Behavior|State|EQS|Perception") },
-		{ TEXT("Gameplay"),  TEXT("ParentClass|Tag|Ability|Effect|Attribute|GameplayCue") },
-		{ TEXT("PCG"),       TEXT("Graph|Node|Parameter|Spline|Point") },
-		{ TEXT("Groom"),     TEXT("Strand|Hair|LOD|Material|Simulation") },
-		{ TEXT("Geometry"),  TEXT("Bounds|Vertex|Triangle|Cache|Frame") },
-		{ TEXT("Media"),     TEXT("URL|Source|Player|Texture|Duration") },
-		{ TEXT("World"),     TEXT("Level|Actor|Streaming|Landscape|Light|World") },
-		{ TEXT("Text"),      TEXT("Font|String|Size|Face|Table") },
-		{ TEXT("Rendering"), TEXT("Capture|Reflection|Light|Exposure|Profile") },
-		{ TEXT("Editor"),    TEXT("Settings|Config|Developer|Tool") },
-		{ TEXT("Network"),   TEXT("Replication|Net|Channel|RPC") },
-		{ TEXT("Scripting"), TEXT("Script|Lua|Class|Module") },
-		{ TEXT("Verse"),     TEXT("Verse|Script|Module") },
-		{ TEXT("Misc"),      TEXT("ParentClass|GeneratedClass|BoundsSize|Duration|Skeleton|RowCount|SizeX") },
-	};
-	static const int32 GProfileRuleCount = UE_ARRAY_COUNT(GProfileRules);
-
-	struct FCapabilityRule
-	{
-		const TCHAR* Name;
-		const TCHAR* TagFragment;
-	};
-	static const FCapabilityRule GCapabilityRules[] = {
-		{ TEXT("has_bounds"),   TEXT("Bounds") },
-		{ TEXT("has_skeleton"), TEXT("Skeleton") },
-		{ TEXT("has_duration"), TEXT("Duration") },
-		{ TEXT("has_parent"),   TEXT("ParentClass") },
-		{ TEXT("has_material"), TEXT("Material") },
-		{ TEXT("has_curve"),    TEXT("Curve") },
-		{ TEXT("has_socket"),   TEXT("Socket") },
-		{ TEXT("has_lod"),      TEXT("LOD") },
-	};
-	static const int32 GCapabilityRuleCount = UE_ARRAY_COUNT(GCapabilityRules);
+	// The rule tables shared by both extractors (profile fragments, capability
+	// rules, naming prefixes) live in the generated UALFeatureProfiles.h,
+	// rendered from Server/ual_common/taxonomy.yaml. Profiles and capabilities
+	// are AssetRegistry Tag *names*, never loaded UObject properties, so this
+	// extractor stays strictly zero-load.
 
 	FString FamilyFor(const FString& AssetClass)
 	{
@@ -83,14 +35,18 @@ namespace
 
 	FString ProfileKeysFor(const FString& Family)
 	{
-		for (int32 i = 0; i < GProfileRuleCount; ++i)
+		// The generated table has one rule per YAML family (plus the fallback),
+		// so a newly added family can no longer silently lose its profile.
+		for (int32 i = 0; i < UALFeatureProfiles::GProfileRuleTableCount; ++i)
 		{
-			if (Family.Equals(GProfileRules[i].Family, ESearchCase::IgnoreCase))
+			const UALFeatureProfiles::FFeatureProfileRule& Rule =
+				UALFeatureProfiles::GProfileRuleTable[i];
+			if (Family.Equals(Rule.Family, ESearchCase::IgnoreCase))
 			{
-				return FString(GProfileRules[i].Keys);
+				return FString(Rule.Keys);
 			}
 		}
-		return FString(TEXT("ParentClass|GeneratedClass|BoundsSize|Duration|Skeleton"));
+		return FString(UALFeatureProfiles::GDefaultProfileKeys);
 	}
 
 	bool IsNumericTag(const FString& Value)
@@ -261,13 +217,16 @@ bool FUALTypedFeatureExtractor::Extract(const FAssetData& AssetData, FUALAssetRe
 	}
 
 	// Capability flags are derived from Tag *names*, never from loaded objects.
-	for (int32 i = 0; i < GCapabilityRuleCount; ++i)
+	// The generated table fixes the emitted order deterministically.
+	for (int32 i = 0; i < UALFeatureProfiles::GCapabilityRuleTableCount; ++i)
 	{
+		const UALFeatureProfiles::FCapabilityRule& Rule =
+			UALFeatureProfiles::GCapabilityRuleTable[i];
 		for (const FString& Key : TagKeys)
 		{
-			if (Key.Contains(GCapabilityRules[i].TagFragment, ESearchCase::IgnoreCase))
+			if (Key.Contains(Rule.TagFragment, ESearchCase::IgnoreCase))
 			{
-				Capabilities.Add(FString(GCapabilityRules[i].Name));
+				Capabilities.Add(FString(Rule.Name));
 				break;
 			}
 		}

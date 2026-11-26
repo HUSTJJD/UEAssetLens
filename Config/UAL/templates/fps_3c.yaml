@@ -1,0 +1,138 @@
+# Declarative FPS 3C GameSpec template. Data only; no executable references.
+version: 1
+rules:
+  - id: fps_3c
+    template_id: fps_3c
+    version: 1
+    keywords: [fps, 3c, shooter, 射击]
+    game_spec:
+      domain: fps_3c
+      entities:
+        - {id: player, role: character, controller: player_input, camera: first_person}
+        - {id: enemy, role: ai_agent, behavior: patrol_and_fire}
+        - {id: weapon, role: equipable, fire_mode: single_shot}
+      rules:
+        - {id: movement.walk_speed, value: 420, unit: cm_per_second}
+        - {id: movement.sprint_multiplier, value: 1.6, unit: ratio}
+        - {id: camera.field_of_view, value: 90, unit: degrees}
+        - {id: weapon.fire_interval, value: 0.15, unit: seconds}
+        - {id: ai.detection_radius, value: 1800, unit: centimeters}
+      input:
+        - {id: move, action: IA_FPSMove, binding: axis2d}
+        - {id: look, action: IA_FPSLook, binding: axis2d}
+        - {id: fire, action: IA_FPSFire, binding: pressed}
+        - {id: sprint, action: IA_FPSSprint, binding: held}
+      ui:
+        - {id: hud, widget: WBP_FPSHUD, fields: [health, ammo, crosshair]}
+        - {id: hit_marker, widget: WBP_FPSHUD, fields: [hit_confirmation]}
+      assertions:
+        - schema.required_fields
+        - assets.unique_ids
+        - assembly.resolved
+        - operations.whitelisted
+        - validation.stages
+        - assertions.non_empty
+        - payload.no_code_keys
+        - payload.no_noise_keys
+    assets:
+      - {id: character_blueprint, asset_class: Blueprint, asset_path: /Game/FPS3C/Blueprints/BP_FPSCharacter, role: gameplay}
+      - {id: animation_blueprint, asset_class: AnimBlueprint, asset_path: /Game/FPS3C/Animations/ABP_FPSCharacter, role: animation}
+      - {id: locomotion_blendspace, asset_class: BlendSpace, asset_path: /Game/FPS3C/Animations/BS_FPSLocomotion, role: locomotion}
+      - {id: character_lua, asset_class: Lua, asset_path: /Game/FPS3C/Scripts/FPSCharacter.lua, role: scripting}
+      - {id: enemy_behavior_tree, asset_class: BehaviorTree, asset_path: /Game/FPS3C/AI/BT_FPSEnemy, role: ai}
+      - {id: enemy_blackboard, asset_class: Blackboard, asset_path: /Game/FPS3C/AI/BB_FPSEnemy, role: ai}
+      - {id: camera_blueprint, asset_class: Blueprint, asset_path: /Game/FPS3C/Blueprints/BP_FPSCamera, role: camera}
+      - {id: input_action, asset_class: InputAction, asset_path: /Game/FPS3C/Input/IA_FPSMove, role: input}
+      - {id: input_mapping, asset_class: InputMappingContext, asset_path: /Game/FPS3C/Input/IMC_FPS, role: input}
+      - {id: hud_widget, asset_class: WidgetBlueprint, asset_path: /Game/FPS3C/UI/WBP_FPSHUD, role: ui}
+      - {id: weapon_mesh, asset_class: StaticMesh, asset_path: /Game/FPS3C/Weapons/SM_FPSRifle, role: prop}
+      - {id: idle_animation, asset_class: AnimSequence, asset_path: /Game/FPS3C/Animations/AM_FPSIdle, role: animation}
+      - {id: run_animation, asset_class: AnimSequence, asset_path: /Game/FPS3C/Animations/AM_FPSRun, role: animation}
+      - {id: fire_animation, asset_class: AnimSequence, asset_path: /Game/FPS3C/Animations/AM_FPSFire, role: animation}
+      - {id: muzzle_vfx, asset_class: NiagaraSystem, asset_path: /Game/FPS3C/VFX/NS_FPSMuzzleFlash, role: vfx}
+      - {id: impact_vfx, asset_class: NiagaraSystem, asset_path: /Game/FPS3C/VFX/NS_FPSImpact, role: vfx}
+      - {id: fire_audio, asset_class: SoundWave, asset_path: /Game/FPS3C/Audio/SW_FPSFire, role: audio}
+      - {id: footstep_audio, asset_class: SoundWave, asset_path: /Game/FPS3C/Audio/SW_FPSFootstep, role: audio}
+    assembly:
+      - {source: character_blueprint, target: animation_blueprint, relation: driven_by}
+      - {source: animation_blueprint, target: locomotion_blendspace, relation: drives}
+      - {source: locomotion_blendspace, target: idle_animation, relation: samples}
+      - {source: locomotion_blendspace, target: run_animation, relation: samples}
+      - {source: character_blueprint, target: character_lua, relation: scripted_by}
+      - {source: character_blueprint, target: camera_blueprint, relation: owns}
+      - {source: input_mapping, target: input_action, relation: maps}
+      - {source: input_action, target: character_blueprint, relation: controls}
+      - {source: hud_widget, target: character_blueprint, relation: presents}
+      - {source: weapon_mesh, target: character_blueprint, relation: attached_to}
+      - {source: fire_animation, target: muzzle_vfx, relation: accompanies}
+      - {source: fire_animation, target: fire_audio, relation: accompanies}
+      - {source: footstep_audio, target: run_animation, relation: accompanies}
+      - {source: enemy_behavior_tree, target: enemy_blackboard, relation: uses}
+      - {source: enemy_behavior_tree, target: character_blueprint, relation: targets}
+      - {source: impact_vfx, target: weapon_mesh, relation: spawned_by}
+    operations:
+      - id: op_create_folder
+        tool: CreateFolder
+        inverse: Delete
+        access_mode: Write
+        risk: low
+        arguments: {folder: /Game/FPS3C}
+      - id: op_duplicate_character
+        tool: Duplicate
+        inverse: Delete
+        access_mode: Write
+        risk: medium
+        arguments: {source: /Game/Templates/BP_ThirdPersonCharacter, destination: /Game/FPS3C/Blueprints/BP_FPSCharacter}
+      - id: op_set_character_properties
+        tool: SetProperties
+        inverse: ResetProperties
+        access_mode: Write
+        risk: medium
+        arguments:
+          asset: /Game/FPS3C/Blueprints/BP_FPSCharacter
+          properties: {camera: BP_FPSCamera, anim_blueprint: ABP_FPSCharacter, lua_module: FPSCharacter.lua}
+      - id: op_set_camera_properties
+        tool: SetProperties
+        inverse: ResetProperties
+        access_mode: Write
+        risk: medium
+        arguments:
+          asset: /Game/FPS3C/Blueprints/BP_FPSCamera
+          properties: {field_of_view: 90, use_pawn_control_rotation: true}
+      - id: op_set_weapon_material
+        tool: SetMaterial
+        inverse: SetMaterial
+        access_mode: Write
+        risk: medium
+        arguments: {asset: /Game/FPS3C/Weapons/SM_FPSRifle, material: /Game/FPS3C/Materials/M_FPSRifle}
+      - id: op_tag_assets
+        tool: AddUserAssetTags
+        inverse: RemoveUserAssetTags
+        access_mode: Write
+        risk: low
+        arguments: {assets: [/Game/FPS3C/Blueprints/BP_FPSCharacter, /Game/FPS3C/Weapons/SM_FPSRifle], tags: [fps_3c, greybox]}
+      - id: op_save_assets
+        tool: SaveAsset
+        inverse: SaveAsset
+        access_mode: Write
+        risk: low
+        arguments: {assets: [/Game/FPS3C/Blueprints/BP_FPSCharacter, /Game/FPS3C/Weapons/SM_FPSRifle]}
+      - id: op_collection
+        tool: AddAssetsToCollection
+        inverse: RemoveAssetsFromCollection
+        access_mode: Write
+        risk: low
+        arguments: {collection: /Game/FPS3C, assets: [/Game/FPS3C/Blueprints/BP_FPSCharacter, /Game/FPS3C/Weapons/SM_FPSRifle]}
+    assertions:
+      - {id: schema.required_fields, kind: required_keys, target: game_spec, required: [domain, entities, rules, input, ui, assertions]}
+      - {id: assets.unique_ids, kind: unique_ids, target: assets}
+      - {id: assembly.resolved, kind: known_asset_ids, target: assembly}
+      - {id: operations.whitelisted, kind: whitelisted_tools, target: operations}
+      - {id: validation.stages, kind: required_stages, target: validation, required: [compile, PIE, snapshot, assert, repair, rollback]}
+      - {id: assertions.non_empty, kind: non_empty, target: game_spec.assertions}
+      - {id: payload.no_code_keys, kind: forbidden_keys, target: all, forbidden: [impl, handler, eval, exec, code, script]}
+      - {id: payload.no_noise_keys, kind: forbidden_keys, target: all, forbidden: [timestamp, updated_at, session_id]}
+    validation:
+      stages: [compile, PIE, snapshot, assert, repair, rollback]
+      offline_status: deferred_offline
+      deterministic_assertion_status: pass

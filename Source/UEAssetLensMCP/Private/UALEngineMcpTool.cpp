@@ -22,14 +22,31 @@ namespace
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Out);
 		return FJsonSerializer::Serialize(Params.ToSharedRef(), Writer) ? Out : FString(TEXT("{}"));
 	}
+
+	bool IsKnownAccessMode(const FString& AccessMode)
+	{
+		return AccessMode == TEXT("read") || AccessMode == TEXT("write") ||
+			AccessMode == TEXT("execute");
+	}
 }
 
 FUALEngineMcpTool::FUALEngineMcpTool(FString InName, FString InDescription,
-	TSharedPtr<FJsonObject> InInputSchema)
+	TSharedPtr<FJsonObject> InInputSchema, FString InAccessMode, bool bInReadOnlyHint)
 	: Name(MoveTemp(InName))
 	, Description(MoveTemp(InDescription))
 	, InputSchema(MoveTemp(InInputSchema))
+	, AccessMode(MoveTemp(InAccessMode))
+	, bReadOnlyHint(bInReadOnlyHint)
 {
+	// 未标注 / 未知值按 Execute 处理；readOnlyHint 只允许 Read 为 true。
+	if (!IsKnownAccessMode(AccessMode))
+	{
+		AccessMode = TEXT("execute");
+	}
+	if (AccessMode != TEXT("read"))
+	{
+		bReadOnlyHint = false;
+	}
 }
 
 TSharedPtr<FJsonObject> FUALEngineMcpTool::GetInputJsonSchema() const
@@ -41,11 +58,11 @@ TSharedPtr<FJsonObject> FUALEngineMcpTool::GetInputJsonSchema() const
 
 TSharedPtr<FJsonObject> FUALEngineMcpTool::GetAnnotations() const
 {
-	// All four UAL tools are read-only index queries. Match the annotations
-	// emitted by ToolsetRegistry for AIAccessMode="Read".
+	// 逐工具来自 tool_schemas.yaml 的描述符，匹配 ToolsetRegistry 的
+	// {"accessMode": "read"|"write"|"execute", "readOnlyHint": ...} 约定。
 	FJsonDomBuilder::FObject Annotations;
-	Annotations.Set(TEXT("accessMode"), TEXT("read"));
-	Annotations.Set(TEXT("readOnlyHint"), true);
+	Annotations.Set(TEXT("accessMode"), *AccessMode);
+	Annotations.Set(TEXT("readOnlyHint"), bReadOnlyHint);
 	return Annotations.AsJsonObject().ToSharedPtr();
 }
 

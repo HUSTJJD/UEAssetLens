@@ -1,0 +1,296 @@
+# Official UE6 asset-mutation whitelist for UAL's resource gateway.
+# Names are the exact bare tool functions inventoried in the parent project's
+# Docs/ai-capabilities/toolset-inventory.yaml. Canonical MCP qualified names are
+# resolved by the host ToolsetRegistry, never guessed by adding a prefix here.
+# UAL does not reimplement any of these tools: it validates, plans, approves,
+# and delegates through an injected host executor. No Execute / UI tools here.
+# Inverse specs are deterministic data: restore_baseline uses a bounded plan-time
+# snapshot, idempotent inverses repeat only a non-destructive tool, and refuse
+# marks operations that cannot be recovered without a host-side snapshot.
+version: 1
+
+tools:
+  - name: AddUserAssetTags
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: AddUserAssetTags
+    risk: low
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [assets, tags]
+      argument_map:
+        asset_paths: {source: baseline, key: assets}
+        tags: {source: baseline, key: tags}
+  - name: CreateFolder
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: Delete
+    risk: low
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [folder, folder_exists]
+      expect_baseline: {folder_exists: false}
+      argument_map:
+        asset_path: {source: baseline, key: folder}
+  - name: Delete
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: Duplicate
+    risk: high
+    inverse_spec:
+      mode: refuse
+      reason: deletion_requires_external_snapshot
+  - name: Duplicate
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: Delete
+    risk: medium
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [destination, destination_exists]
+      expect_baseline: {destination_exists: false}
+      argument_map:
+        asset_path: {source: baseline, key: destination}
+  - name: FixUpRedirectors
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: ResetProperties
+    risk: medium
+    inverse_spec:
+      mode: refuse
+      reason: redirector_baseline_unavailable
+  - name: Move
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: Move
+    risk: medium
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [source, destination]
+      argument_map:
+        source_path: {source: baseline, key: destination}
+        destination_path: {source: baseline, key: source}
+  - name: ReloadAsset
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: ReloadAsset
+    risk: low
+    inverse_spec:
+      mode: idempotent
+      require_baseline_keys: [asset]
+      argument_map:
+        asset_path: {source: baseline, key: asset}
+  - name: RemoveUserAssetTags
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: AddUserAssetTags
+    risk: low
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [assets, tags]
+      argument_map:
+        asset_paths: {source: baseline, key: assets}
+        tags: {source: baseline, key: tags}
+  - name: SaveAsset
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: SaveAsset
+    risk: low
+    inverse_spec:
+      mode: idempotent
+      require_baseline_keys: [asset]
+      argument_map:
+        asset_path: {source: baseline, key: asset}
+  - name: UpdateMetadataTags
+    toolset: AssetToolset
+    access_mode: Write
+    inverse: UpdateMetadataTags
+    risk: low
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [assets, metadata]
+      argument_map:
+        asset_paths: {source: baseline, key: assets}
+        metadata: {source: baseline, key: metadata}
+  - name: AddAssetsToCollection
+    toolset: EditorAppToolset
+    access_mode: Write
+    inverse: RemoveAssetsFromCollection
+    risk: low
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [collection, assets]
+      argument_map:
+        collection_path: {source: baseline, key: collection}
+        asset_paths: {source: baseline, key: assets}
+  - name: CreateCollection
+    toolset: EditorAppToolset
+    access_mode: Write
+    inverse: DestroyCollection
+    risk: low
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [collection, collection_exists]
+      expect_baseline: {collection_exists: false}
+      argument_map:
+        collection_path: {source: baseline, key: collection}
+  - name: DestroyCollection
+    toolset: EditorAppToolset
+    access_mode: Write
+    inverse: CreateCollection
+    risk: medium
+    inverse_spec:
+      mode: refuse
+      reason: collection_state_baseline_unavailable
+  - name: RemoveAssetsFromCollection
+    toolset: EditorAppToolset
+    access_mode: Write
+    inverse: AddAssetsToCollection
+    risk: low
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [collection, assets]
+      argument_map:
+        collection_path: {source: baseline, key: collection}
+        asset_paths: {source: baseline, key: assets}
+  - name: OpenEditorForAsset
+    toolset: EditorAppToolset
+    access_mode: Write
+    inverse: CloseEditorForAsset
+    risk: low
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [asset, editor_open]
+      expect_baseline: {editor_open: false}
+      argument_map:
+        asset_path: {source: baseline, key: asset}
+  - name: CloseEditorForAsset
+    toolset: EditorAppToolset
+    access_mode: Write
+    inverse: OpenEditorForAsset
+    risk: low
+    inverse_spec:
+      mode: refuse
+      reason: editor_ui_state_baseline_unavailable
+  - name: SetProperties
+    toolset: ObjectToolset
+    access_mode: Write
+    inverse: SetProperties
+    risk: medium
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [asset, properties]
+      argument_map:
+        asset_path: {source: baseline, key: asset}
+        properties: {source: baseline, key: properties}
+  - name: ResetProperties
+    toolset: ObjectToolset
+    access_mode: Write
+    inverse: SetProperties
+    risk: medium
+    inverse_spec:
+      mode: refuse
+      reason: property_baseline_unavailable
+  - name: CreateMaterial
+    toolset: MaterialToolset
+    access_mode: Write
+    inverse: Delete
+    risk: medium
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [asset, asset_exists]
+      expect_baseline: {asset_exists: false}
+      argument_map:
+        asset_path: {source: baseline, key: asset}
+  - name: SetMaterial
+    toolset: StaticMeshToolset
+    access_mode: Write
+    inverse: SetMaterial
+    risk: medium
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [asset, material]
+      argument_map:
+        asset_path: {source: baseline, key: asset}
+        material: {source: baseline, key: material}
+  - name: SetScalarParameter
+    toolset: MaterialInstanceToolset
+    access_mode: Write
+    inverse: SetScalarParameter
+    risk: low
+    inverse_spec:
+      mode: refuse
+      reason: parameter_baseline_unavailable
+  - name: SetVectorParameter
+    toolset: MaterialInstanceToolset
+    access_mode: Write
+    inverse: SetVectorParameter
+    risk: low
+    inverse_spec:
+      mode: refuse
+      reason: parameter_baseline_unavailable
+  - name: SetTextureParameter
+    toolset: MaterialInstanceToolset
+    access_mode: Write
+    inverse: SetTextureParameter
+    risk: low
+    inverse_spec:
+      mode: refuse
+      reason: parameter_baseline_unavailable
+  - name: SetStaticSwitchParameter
+    toolset: MaterialInstanceToolset
+    access_mode: Write
+    inverse: SetStaticSwitchParameter
+    risk: low
+    inverse_spec:
+      mode: refuse
+      reason: parameter_baseline_unavailable
+  - name: SetParameterOverride
+    toolset: MaterialInstanceToolset
+    access_mode: Write
+    inverse: SetParameterOverride
+    risk: low
+    inverse_spec:
+      mode: refuse
+      reason: override_baseline_unavailable
+  - name: GenerateLods
+    toolset: StaticMeshToolset
+    access_mode: Write
+    inverse: ResetProperties
+    risk: medium
+    inverse_spec:
+      mode: refuse
+      reason: generated_lod_baseline_unavailable
+  - name: SetNaniteEnabled
+    toolset: StaticMeshToolset
+    access_mode: Write
+    inverse: SetNaniteEnabled
+    risk: medium
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [asset, enabled]
+      argument_map:
+        asset_path: {source: baseline, key: asset}
+        enabled: {source: baseline, key: enabled}
+  - name: RenameFolder
+    toolset: LevelToolset
+    access_mode: Write
+    inverse: RenameFolder
+    risk: medium
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [source, destination]
+      argument_map:
+        source_path: {source: baseline, key: destination}
+        destination_path: {source: baseline, key: source}
+  - name: SetActorTransform
+    toolset: ActorToolset
+    access_mode: Write
+    inverse: SetActorTransform
+    risk: medium
+    inverse_spec:
+      mode: restore_baseline
+      require_baseline_keys: [asset, transform]
+      argument_map:
+        asset_path: {source: baseline, key: asset}
+        transform: {source: baseline, key: transform}

@@ -17,7 +17,7 @@ from typing import Any, Sequence
 
 import duckdb
 
-from . import policy
+from . import extensions, policy
 from .registry import ExtensionRegistry
 from .settings import ResolvedSettings, load_namespace
 
@@ -68,7 +68,14 @@ def run_policy_gate(
 ) -> tuple[str, list[policy.Violation], ResolvedSettings]:
     """Resolve rules, validate the index snapshot and render a bounded report."""
     resolved = load_namespace(namespace, project_root=project_root)
-    engine = policy.PolicyEngine(resolved, registry=registry)
+    active_registry = registry
+    if active_registry is None:
+        # Declarative `Config/UAL/extensions/*.yaml` manifests make `kind:
+        # custom` rules work in the CLI without importing arbitrary code.
+        active_registry = extensions.load_registry(
+            project_root=project_root,
+        ).registry
+    engine = policy.PolicyEngine(resolved, registry=active_registry)
     violations = engine.validate_many(load_index_assets(con))
     return policy.render_report(violations, limit=limit), violations, resolved
 

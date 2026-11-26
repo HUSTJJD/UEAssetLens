@@ -3,6 +3,9 @@
 # The archive is engine-agnostic on purpose: it contains no EngineVersion
 # pin and no compiled binaries, so it can be dropped into any compatible
 # project's Plugins/ directory and rebuilt there.
+# NoRedist: the dev-only engine MCP module, any official MCP plugin artifacts
+# and a descriptor enabling the optional official plugin are stripped and
+# verified offline by Tools/package_plugin.py --verify-only.
 name: release
 
 on:
@@ -41,7 +44,7 @@ jobs:
           python Tools/package_plugin.py --out-dir dist
           echo "archive=$(ls dist/*.zip)" >> "$GITHUB_OUTPUT"
 
-      - name: Verify archive contents
+      - name: Verify NoRedist archive contents
         shell: bash
         run: |
           python Tools/package_plugin.py --verify-only "${{ steps.build.outputs.archive }}"
@@ -53,6 +56,21 @@ jobs:
           print('\n'.join(roots))
           assert any(n.endswith('.uplugin') for n in z.namelist())
           PY
+
+      - name: Verify NoRedist release descriptor
+        shell: bash
+        run: |
+          python - <<'PY'
+          import glob, zipfile
+          from pathlib import Path
+          archive = glob.glob('dist/*.zip')[0]
+          with zipfile.ZipFile(archive) as zf:
+              descriptors = [n for n in zf.namelist() if n.endswith('.uplugin')]
+              assert len(descriptors) == 1, descriptors
+              Path('dist/release-descriptor.uplugin').write_bytes(zf.read(descriptors[0]))
+          PY
+          python Tools/package_plugin.py --verify-only dist/release-descriptor.uplugin
+          rm dist/release-descriptor.uplugin
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

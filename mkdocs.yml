@@ -1,5 +1,5 @@
 site_name: UEAssetLens
-site_description: 零 VLM 依赖的 Unreal Engine 确定性资产语义索引、防重复检测与 AI Agent (MCP) 检索中枢
+site_description: 零 VLM 依赖的 Unreal Engine 资产内核 (Asset Kernel)——超大规模游戏开发中所有底层资源交互的唯一入口，覆盖资产的检索、复用、管理、开发、编辑、校验与演化全生命周期；向上服务 AI 工作流，向外提供可注册扩展与可覆盖策略。当前已交付只读语义检索中枢与 Phase 0 骨架，其余为规格目标
 site_url: https://hustjjd.github.io/UEAssetLens/
 repo_url: https://github.com/HUSTJJD/UEAssetLens
 repo_name: HUSTJJD/UEAssetLens
@@ -47,10 +47,18 @@ extra:
 
 nav:
   - 首页: index.md
+  - 项目定位与能力规格: positioning.md
+  - 快速开始: quickstart.md
   - 架构与治理:
       - 架构说明: architecture.md
+      - 资产全生命周期架构规格（spec 主文）: asset-lifecycle-architecture.md
       - MCP 定位与事务层规格: mcp-positioning.md
-      - 资产全生命周期架构: asset-lifecycle-architecture.md
+      - 离线内核实现: kernel-implementation.md
+      - 需求追踪矩阵: requirements-traceability.md
+      - 性能基准: benchmarks.md
+      - 事务与五层差异工件: transaction-and-diff.md
+      - GameSpec / FPS 3C 工作流: gamespec-workflow.md
+      - 扩展体系: extensions.md
       - CI 门禁: ci-gates.md
       - 已知限制: known-limitations.md
   - 参考（自动生成）:

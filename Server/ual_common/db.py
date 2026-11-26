@@ -1,7 +1,10 @@
-"""DuckDB storage layer for UEAssetLens v2.0.
+"""DuckDB storage layer for UEAssetLens v3.0.
 
 Read path is strictly read-only (MCP Server). The only writer is ual-cli build.
-Field names are the contract in Server/schema/PROTOCOL.md.
+Field names are the contract in Server/schema/PROTOCOL.md. The 16-key Core
+Record remains frozen; typed extensions live in the separate
+``extension_payload`` table and are synced four places: PROTOCOL.md, init.sql,
+UALTypes.h and this module.
 """
 from __future__ import annotations
 
@@ -23,6 +26,13 @@ ASSET_COLUMNS: tuple[str, ...] = (
     "asset_path", "logical_id", "asset_class", "parent_class", "taxonomy",
     "tokens", "content_hash", "duration", "bounds_size", "skeleton_path",
     "dominant_limb", "fingerprint_vec", "interface_spec", "domain_spec", "yaml_cache",
+)
+
+# Phase 1: typed extension payload, deliberately NOT part of the frozen 16-key
+# staging document stream. No updated_at / timestamps / random ids / local paths.
+EXTENSION_PAYLOAD_COLUMNS: tuple[str, ...] = (
+    "asset_path", "namespace", "field_name", "value_type", "value_text",
+    "value_number", "value_bool", "provenance",
 )
 
 
@@ -249,6 +259,121 @@ def ingest_records(
     if rebuild:
         rebuild_fts(con)
     return {"assets": assets, "edges": edges}
+
+
+# --------------------------------------------------------------------------- typed extension payload (v3.0)
+
+def ingest_extension_payload(
+    con: duckdb.DuckDBPyConnection,
+    rows: Iterable[dict[str, Any]],
+    *,
+    clear: bool = False,
+) -> int:
+    """Upsert typed extension fields; callers never concatenate SQL from input."""
+    if clear:
+        con.execute("DELETE FROM extension_payload")
+    cols = ", ".join(EXTENSION_PAYLOAD_COLUMNS)
+    placeholders = ", ".join("?" for _ in EXTENSION_PAYLOAD_COLUMNS)
+    key = ("asset_path", "namespace", "field_name")
+    updates = ", ".join(
+        f"{c}=excluded.{c}" for c in EXTENSION_PAYLOAD_COLUMNS if c not in key
+    )
+    sql = (
+        f"INSERT INTO extension_payload ({cols}) VALUES ({placeholders}) "
+        f"ON CONFLICT (asset_path, namespace, field_name) DO UPDATE SET {updates}"
+    )
+    written = 0
+    for row in rows:
+        con.execute(sql, [row.get(c) for c in EXTENSION_PAYLOAD_COLUMNS])
+        written += 1
+    return written
+
+
+def clear_extension_payload(
+    con: duckdb.DuckDBPyConnection, asset_path: str | None = None
+) -> int:
+    if asset_path is None:
+        return int(con.execute("DELETE FROM extension_payload").fetchone()[0])
+    return int(
+        con.execute(
+            "DELETE FROM extension_payload WHERE asset_path = ?", [asset_path]
+        ).fetchone()[0]
+    )
+
+
+def search_extension_payload(
+    con: duckdb.DuckDBPyConnection,
+    *,
+    namespace: str | None = None,
+    field_name: str | None = None,
+    value_contains: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Bounded, deterministic typed-field view; no whole-table dump leaves CLI."""
+    limit = max(1, min(int(limit or 100), 500))
+    where: list[str] = []
+    params: list[Any] = []
+    if namespace:
+        where.append("namespace = ?")
+        params.append(str(namespace))
+    if field_name:
+        where.append("field_name = ?")
+        params.append(str(field_name))
+    if value_contains:
+        where.append("LOWER(COALESCE(value_text, '')) LIKE ?")
+        params.append("%" + str(value_contains).lower() + "%")
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    sql = (
+        "SELECT asset_path, namespace, field_name, value_type, value_text, "
+        "value_number, value_bool, provenance FROM extension_payload" + clause +
+        " ORDER BY asset_path, namespace, field_name LIMIT ?"
+    )
+    rows = _rows(con, sql, params + [limit])
+    for row in rows:
+        if row["value_text"] not in (None, ""):
+            row["value_display"] = str(row["value_text"])
+        elif row["value_number"] is not None:
+            row["value_display"] = f"{float(row['value_number']):.4f}"
+        elif row["value_bool"] is not None:
+            row["value_display"] = "true" if row["value_bool"] else "false"
+        else:
+            row["value_display"] = ""
+    return rows
+
+
+def extension_payload_catalog(
+    con: duckdb.DuckDBPyConnection, *, limit: int = 200
+) -> list[dict[str, Any]]:
+    limit = max(1, min(int(limit or 200), 500))
+    return _rows(
+        con,
+        "SELECT namespace, field_name, value_type, provenance, "
+        "COUNT(DISTINCT asset_path) AS asset_count FROM extension_payload "
+        "GROUP BY namespace, field_name, value_type, provenance "
+        "ORDER BY namespace, field_name, value_type, provenance LIMIT ?",
+        [limit],
+    )
+
+
+def remove_assets(
+    con: duckdb.DuckDBPyConnection, paths: Sequence[str]
+) -> int:
+    """Delete removed asset rows from all index tables; used by apply-events."""
+    unique = sorted({str(path) for path in paths if str(path).startswith("/Game/")})
+    if not unique:
+        return 0
+    placeholders = ", ".join("?" for _ in unique)
+    con.execute(f"DELETE FROM extension_payload WHERE asset_path IN ({placeholders})", unique)
+    con.execute(
+        f"DELETE FROM asset_edges WHERE source_path IN ({placeholders}) "
+        f"OR target_path IN ({placeholders})",
+        unique + unique,
+    )
+    return int(
+        con.execute(
+            f"DELETE FROM assets WHERE asset_path IN ({placeholders})", unique
+        ).fetchone()[0]
+    )
 
 
 # --------------------------------------------------------------------------- read helpers

@@ -1,14 +1,16 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Run the UEAssetLens (UAL) test suite, regenerate reference docs, and build
-    the MkDocs site in strict mode.
+    Run the UEAssetLens (UAL) test suite, regenerate reference docs, build the
+    MkDocs site in strict mode, and run the offline kernel checks.
 
 .DESCRIPTION
     Locates the repository root, prepares a local virtual environment
     (unless -SkipVenv is supplied), installs runtime and docs dependencies,
-    regenerates the auto-generated reference pages, builds the documentation
-    site with --strict, runs pytest, and finally runs the CLI self-test.
+    regenerates the auto-generated reference pages, checks generated taxonomy
+    headers, tool annotations and the offline engine toolset inventory, builds
+    the documentation site with --strict, runs pytest, self-tests, a
+    10000-asset benchmark and the HTTP setup DryRun.
     Any failed step aborts the run with a non-zero exit code.
 
 .PARAMETER SkipVenv
@@ -17,8 +19,9 @@
 
 .PARAMETER SkipDocs
     Skip docs dependency install, reference generation, and the strict site
-    build. Useful when mkdocs-material is not available locally. CI never uses
-    this switch.
+    build. Generated-header checks, annotation / engine-toolset audits,
+    Python tests, self-tests, benchmark and HTTP setup DryRun still run.
+    CI never uses this switch.
 
 .EXAMPLE
     pwsh -File Tools/run_tests.ps1
@@ -83,19 +86,29 @@ function Resolve-RepoRoot {
 }
 
 # ---------------------------------------------------------------------------
-Write-Section '1/8  Locating repository root'
+Write-Section '1/13  Locating repository root'
 $repoRoot = Resolve-RepoRoot
 Write-Step ('RepoRoot    : ' + $repoRoot)
 
-$requirements = Join-Path $repoRoot 'requirements.txt'
-$docsReqs     = Join-Path $repoRoot 'requirements-docs.txt'
-$mkdocsYml    = Join-Path $repoRoot 'mkdocs.yml'
-$generator    = Join-Path $repoRoot 'Tools/gen_docs.py'
-$testDir      = Join-Path $repoRoot 'Server/tests'
-$cliEntry     = Join-Path $repoRoot 'Server/ual_cli/ual_cli.py'
-$bridgeEntry  = Join-Path $repoRoot 'Server/ual_mcp/engine_bridge.py'
+$requirements      = Join-Path $repoRoot 'requirements.txt'
+$docsReqs          = Join-Path $repoRoot 'requirements-docs.txt'
+$mkdocsYml         = Join-Path $repoRoot 'mkdocs.yml'
+$generator         = Join-Path $repoRoot 'Tools/gen_docs.py'
+$taxonomyGenerator = Join-Path $repoRoot 'Tools/gen_taxonomy.py'
+$annotationAudit   = Join-Path $repoRoot 'Tools/audit_tool_annotations.py'
+$engineAudit       = Join-Path $repoRoot 'Tools/audit_engine_toolsets.py'
+$testDir           = Join-Path $repoRoot 'Server/tests'
+$cliEntry          = Join-Path $repoRoot 'Server/ual_cli/ual_cli.py'
+$serverEntry       = Join-Path $repoRoot 'Server/ual_mcp/server.py'
+$bridgeEntry       = Join-Path $repoRoot 'Server/ual_mcp/engine_bridge.py'
+$benchScript       = Join-Path $repoRoot 'Tools/bench_index.py'
+$setupScript       = Join-Path $repoRoot 'Tools/setup_mcp.ps1'
 
-foreach ($required in @($requirements, $testDir, $cliEntry, $bridgeEntry)) {
+$alwaysRequired = @(
+    $requirements, $taxonomyGenerator, $annotationAudit, $engineAudit,
+    $testDir, $cliEntry, $serverEntry, $bridgeEntry, $benchScript, $setupScript
+)
+foreach ($required in $alwaysRequired) {
     if (-not (Test-Path -LiteralPath $required)) {
         Write-Host ('[FAIL] missing required path: ' + $required) -ForegroundColor Red
         exit 1
@@ -114,7 +127,7 @@ Push-Location -LiteralPath $repoRoot
 $overallOk = $true
 try {
     # -----------------------------------------------------------------------
-    Write-Section '2/8  Preparing Python environment'
+    Write-Section '2/13  Preparing Python environment'
     if ($SkipVenv) {
         Write-Step '-SkipVenv: using interpreter from PATH / active environment.'
         $python = Get-BasePython
@@ -144,12 +157,12 @@ try {
     Write-Step ('Interpreter : ' + $python)
 
     # -----------------------------------------------------------------------
-    Write-Section '3/8  Installing runtime dependencies'
+    Write-Section '3/13  Installing runtime dependencies'
     & $python -m pip install -r $requirements
     Assert-ExitCode -Code $LASTEXITCODE -What 'pip install -r requirements.txt'
 
     # -----------------------------------------------------------------------
-    Write-Section '4/8  Installing documentation dependencies'
+    Write-Section '4/13  Installing documentation dependencies'
     if ($SkipDocs) {
         Write-Step '-SkipDocs: skipping MkDocs toolchain install.'
     }
@@ -159,7 +172,7 @@ try {
     }
 
     # -----------------------------------------------------------------------
-    Write-Section '5/8  Generating API reference'
+    Write-Section '5/13  Generating API reference'
     if ($SkipDocs) {
         Write-Step '-SkipDocs: skipping reference generation.'
     }
@@ -171,7 +184,22 @@ try {
     }
 
     # -----------------------------------------------------------------------
-    Write-Section '6/8  Building documentation site (strict)'
+    Write-Section '6/13  Checking generated taxonomy headers'
+    & $python $taxonomyGenerator --check
+    Assert-ExitCode -Code $LASTEXITCODE -What 'Tools/gen_taxonomy.py --check'
+
+    # -----------------------------------------------------------------------
+    Write-Section '7/13  Auditing runtime tool annotations'
+    & $python $annotationAudit --check
+    Assert-ExitCode -Code $LASTEXITCODE -What 'Tools/audit_tool_annotations.py --check'
+
+    # -----------------------------------------------------------------------
+    Write-Section '8/13  Auditing offline engine toolset inventory'
+    & $python $engineAudit --check
+    Assert-ExitCode -Code $LASTEXITCODE -What 'Tools/audit_engine_toolsets.py --check'
+
+    # -----------------------------------------------------------------------
+    Write-Section '9/13  Building documentation site (strict)'
     if ($SkipDocs) {
         Write-Step '-SkipDocs: skipping mkdocs build --strict.'
     }
@@ -181,16 +209,30 @@ try {
     }
 
     # -----------------------------------------------------------------------
-    Write-Section '7/8  Running pytest (Server/tests)'
+    Write-Section '10/13 Running pytest (Server/tests)'
     & $python -m pytest $testDir -q
     Assert-ExitCode -Code $LASTEXITCODE -What 'python -m pytest Server/tests -q'
 
     # -----------------------------------------------------------------------
-    Write-Section '8/8  Running CLI and engine-bridge self-tests'
+    Write-Section '11/13 Running CLI and MCP self-tests'
     & $python $cliEntry self-test
     Assert-ExitCode -Code $LASTEXITCODE -What 'ual_cli.py self-test'
+    & $python $serverEntry --self-test
+    Assert-ExitCode -Code $LASTEXITCODE -What 'server.py --self-test'
     & $python $bridgeEntry --self-test
     Assert-ExitCode -Code $LASTEXITCODE -What 'engine_bridge.py --self-test'
+
+    # -----------------------------------------------------------------------
+    Write-Section '12/13 Running 10000-asset index benchmark'
+    & $python $benchScript --count 10000 --incremental --enforce-targets
+    Assert-ExitCode -Code $LASTEXITCODE -What 'Tools/bench_index.py --count 10000 --incremental --enforce-targets'
+
+    # -----------------------------------------------------------------------
+    Write-Section '13/13 Checking HTTP setup DryRun'
+    $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
+    $configRoot = Join-Path ([System.IO.Path]::GetTempPath()) 'ual-config-dryrun'
+    & $pwsh -NoProfile -File $setupScript -DryRun -Transport Http -ConfigRoot $configRoot
+    Assert-ExitCode -Code $LASTEXITCODE -What 'setup_mcp.ps1 -DryRun -Transport Http'
 }
 catch {
     Write-Host ''
@@ -208,5 +250,5 @@ if (-not $overallOk) {
     exit 1
 }
 Write-Section 'RESULT: ALL CHECKS PASSED'
-Write-Host 'Docs generation, strict site build, pytest and CLI self-test succeeded.' -ForegroundColor Green
+Write-Host 'Requested docs, Python contract, self-test, benchmark and HTTP DryRun checks succeeded.' -ForegroundColor Green
 exit 0

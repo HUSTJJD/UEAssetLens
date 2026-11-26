@@ -1,4 +1,5 @@
 #include "FUniversalReflectionExtractor.h"
+#include "UALFeatureProfiles.h"
 #include "UALTaxonomyRules.h"
 
 #include "UALTypes.h"
@@ -18,14 +19,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogUALReflection, Log, All);
 
 namespace
 {
-	// 常见 UE 命名前缀；仅按大小写敏感方式剥离，避免误伤普通单词。
-	const TCHAR* GPrefixes[] =
-	{
-		TEXT("SM_"), TEXT("SK_"), TEXT("AM_"), TEXT("A_"),  TEXT("T_"),
-		TEXT("MI_"), TEXT("M_"),  TEXT("BP_"), TEXT("WBP_"), TEXT("ABP_"),
-		TEXT("NS_"), TEXT("PS_"), TEXT("DA_"), TEXT("AC_"),  TEXT("W_"),
-		TEXT("S_"),  TEXT("B_")
-	};
+	// 常见 UE 命名前缀表由 Tools/gen_taxonomy.py 从 taxonomy.yaml 生成，
+	// 存放在 UALFeatureProfiles.h；仅按大小写敏感方式剥离，避免误伤普通单词。
 
 #if defined(UAL_ENABLE_CDO_REFLECTION) && UAL_ENABLE_CDO_REFLECTION
 	// 安全顶层属性遍历：仅在显式开启 UAL_ENABLE_CDO_REFLECTION 时编译。
@@ -77,8 +72,10 @@ bool FUniversalReflectionExtractor::CanExtract(const FAssetData& AssetData) cons
 
 FString FUniversalReflectionExtractor::StripPrefix(const FString& AssetName)
 {
-	for (const TCHAR* P : GPrefixes)
+	// 前缀表来自 taxonomy.yaml 生成的 UALFeatureProfiles.h，顺序与旧表一致。
+	for (int32 i = 0; i < UALFeatureProfiles::GNamePrefixCount; ++i)
 	{
+		const TCHAR* P = UALFeatureProfiles::GNamePrefixes[i];
 		const int32 Len = FCString::Strlen(P);
 		if (AssetName.Len() > Len && AssetName.StartsWith(P, ESearchCase::CaseSensitive))
 		{

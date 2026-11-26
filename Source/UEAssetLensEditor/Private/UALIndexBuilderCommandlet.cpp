@@ -1,9 +1,10 @@
 #include "UALIndexBuilderCommandlet.h"
 
-#include "UALExtractorRegistry.h"
-#include "FUniversalReflectionExtractor.h"
-#include "UALTypedFeatureExtractor.h"
 #include "UALYamlIndexSink.h"
+#include "UALDuckDbIndexSink.h"
+#include "UEAssetLensEditorModule.h"
+#include "UALExtensionRegistry.h"
+#include "UALFieldRegistry.h"
 #include "UEYaml.h"
 #include "UALTypes.h"
 
@@ -80,6 +81,69 @@ namespace
 		const FString Path = PackageName.ToString();
 		return !Path.IsEmpty() && !Path.StartsWith(TEXT("/Script"), ESearchCase::IgnoreCase);
 	}
+
+	// 声明式字段规格：逐条 Register（不是匿名 namespace 里的 static const 规则表）。
+	// 只描述既有 domain_spec / interface_spec 键的类型，不新增 staging 顶层键。
+	void RegisterBuiltinFieldSpecs(FUALFieldRegistry& Fields)
+	{
+		FUALFieldSpec ForwardCm;
+		ForwardCm.FieldName = TEXT("forward_cm");
+		ForwardCm.ValueType = TEXT("number");
+		ForwardCm.DefaultValue = TEXT("0");
+		ForwardCm.Priority = 10;
+		Fields.Register(ForwardCm);
+
+		FUALFieldSpec Duration;
+		Duration.FieldName = TEXT("duration");
+		Duration.ValueType = TEXT("number");
+		Duration.DefaultValue = TEXT("0");
+		Duration.Priority = 10;
+		Fields.Register(Duration);
+
+		FUALFieldSpec Family;
+		Family.FieldName = TEXT("feature.family");
+		Family.ValueType = TEXT("string");
+		Family.AppliesTo.Reset();
+		Family.AppliesTo.Add(TEXT("AnimMontage"));
+		Family.AppliesTo.Add(TEXT("AnimSequence"));
+		Family.Priority = 50;
+		Fields.Register(Family);
+
+		FUALFieldSpec TagCount;
+		TagCount.FieldName = TEXT("feature.tag_count");
+		TagCount.ValueType = TEXT("integer");
+		TagCount.DefaultValue = TEXT("0");
+		TagCount.Priority = 10;
+		Fields.Register(TagCount);
+
+		FUALFieldSpec PathDepth;
+		PathDepth.FieldName = TEXT("feature.path_depth");
+		PathDepth.ValueType = TEXT("integer");
+		PathDepth.DefaultValue = TEXT("0");
+		PathDepth.Priority = 10;
+		Fields.Register(PathDepth);
+	}
+
+	/** 独立扩展文档：一列 FUALExtensionField，文本一律经 UEYaml emitter。 */
+	FString BuildExtensionDoc(const FUALExtensionField& Field)
+	{
+		TSharedRef<FJsonObject> Obj = MakeShared<FJsonObject>();
+		Obj->SetStringField(TEXT("asset_path"), Field.AssetPath);
+		Obj->SetStringField(TEXT("namespace"), Field.Namespace);
+		Obj->SetStringField(TEXT("field_name"), Field.FieldName);
+		Obj->SetStringField(TEXT("value_type"), Field.ValueType);
+		Obj->SetStringField(TEXT("value_text"), Field.ValueText);
+		if (Field.ValueNumber.IsSet())
+		{
+			Obj->SetNumberField(TEXT("value_number"), Field.ValueNumber.GetValue());
+		}
+		if (Field.ValueBool.IsSet())
+		{
+			Obj->SetBoolField(TEXT("value_bool"), Field.ValueBool.GetValue());
+		}
+		Obj->SetStringField(TEXT("provenance"), Field.Provenance);
+		return UEYaml::EmitDocument(Obj);
+	}
 }
 
 UUALIndexBuilderCommandlet::UUALIndexBuilderCommandlet(const FObjectInitializer& ObjectInitializer)
@@ -92,12 +156,13 @@ UUALIndexBuilderCommandlet::UUALIndexBuilderCommandlet(const FObjectInitializer&
 
 	HelpDescription = TEXT("Build the deterministic UEAssetLens asset specification index (offline / headless).");
 	HelpUsage = TEXT("-run=UALIndexBuilder [-Project=<dir>] [-Out=<name>] [-Incremental] "
-		"[-Roots=/Game,/PluginA] [-IncludePlugins]");
+		"[-Roots=/Game,/PluginA] [-IncludePlugins] [-EmitExtensions]");
 	HelpParamNames.Add(TEXT("-Project="));
 	HelpParamNames.Add(TEXT("-Out="));
 	HelpParamNames.Add(TEXT("-Incremental"));
 	HelpParamNames.Add(TEXT("-Roots="));
 	HelpParamNames.Add(TEXT("-IncludePlugins"));
+	HelpParamNames.Add(TEXT("-EmitExtensions"));
 }
 
 void UUALIndexBuilderCommandlet::ParseParams(const FString& Params,
@@ -180,9 +245,15 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 	bool bIncludePlugins = false;
 	ParseParams(Params, ProjectDir, OutName, bIncremental, Roots, bIncludePlugins);
 
+	// 可选：-EmitExtensions 写出独立的 extensions.yaml 文档流（默认关闭，
+	// 避免旧版 ual-cli build 把非 16 键文档当成资产记录灌库）。
+	const bool bEmitExtensions = FParse::Param(*Params, TEXT("EmitExtensions"));
+
 	UE_LOG(LogUALIndexBuilder, Log, TEXT("=== UALIndexBuilder (-run=UALIndexBuilder) start ==="));
-	UE_LOG(LogUALIndexBuilder, Log, TEXT("Project=%s Out=%s Incremental=%d IncludePlugins=%d"),
-		*ProjectDir, *OutName, bIncremental ? 1 : 0, bIncludePlugins ? 1 : 0);
+	UE_LOG(LogUALIndexBuilder, Log,
+		TEXT("Project=%s Out=%s Incremental=%d IncludePlugins=%d EmitExtensions=%d"),
+		*ProjectDir, *OutName, bIncremental ? 1 : 0, bIncludePlugins ? 1 : 0,
+		bEmitExtensions ? 1 : 0);
 
 	// 1) 收集扫描根。默认保持旧行为只扫 /Game；-Roots 显式指定，
 	//    -IncludePlugins 自动追加所有含内容插件的挂载根（UEAbilityKit / UnLuaNova 等）。
@@ -222,12 +293,44 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 	UE_LOG(LogUALIndexBuilder, Log, TEXT("Scan roots (%d): %s"),
 		ScanPaths.Num(), *FString::Join(ScanPaths, TEXT(", ")));
 
-	// 3) 提取器注册表：通用兜底（Priority 0）+ 全资产特征规范化器（Priority 100）。
-	//    Typed 提取器内部先复用 Universal 的 16 键结果，再追加 feature.* 键；
-	//    单一 AssetClass 专属提取器可继续以 Priority 100 Register 注入。
-	FUALExtractorRegistry Registry;
-	Registry.Register(MakeShared<FUniversalReflectionExtractor>());
-	Registry.Register(MakeShared<FUALTypedFeatureExtractor>());
+	// 3) 共享注册表：Editor 与 Commandlet 取同一个 FUALExtensionRegistry 单例，
+	//    不创建局部栈 FUALExtractorRegistry。通用兜底、全资产特征规范化器和
+	//    声明式领域提取器由 GetSharedExtractorRegistry() 幂等注册；外部插件
+	//    通过 GetEditorRegistry() 注入的提取器同样可见。
+	FUALExtensionRegistry& Extensions = FUALExtensionRegistry::Get();
+	const TSharedPtr<FUALExtractorRegistry> Registry =
+		FUEAssetLensEditorModule::GetSharedExtractorRegistry();
+	if (!Registry.IsValid())
+	{
+		UE_LOG(LogUALIndexBuilder, Error, TEXT("Shared extractor registry is unavailable."));
+		return 1;
+	}
+
+	// 3b) 字段规格注册到共享扩展注册表（namespace=field）。重复键会被拒绝，
+	//     因此多次运行 / Editor 已注册时保持幂等；这些规格只影响独立的
+	//     extension_payload 文档流，不会进入 16 键 staging 文档。
+	FUALFieldRegistry& Fields = FUALFieldRegistry::Get();
+	Fields.ImportFrom(Extensions);
+	RegisterBuiltinFieldSpecs(Fields);
+	int32 MirroredSpecs = 0;
+	for (const FUALFieldSpec& Spec : Fields.Snapshot())
+	{
+		FUALExtensionSpec Ext;
+		Ext.Namespace = Spec.Namespace;
+		Ext.Name = Spec.FieldName;
+		Ext.Version = Spec.Version;
+		Ext.Priority = Spec.Priority;
+		Ext.AppliesTo = Spec.AppliesTo;
+		Ext.Capabilities.Add(TEXT("field_projection"));
+		Ext.SchemaText = Spec.ValueType;
+		if (Extensions.Register(Ext))
+		{
+			++MirroredSpecs;
+		}
+	}
+	UE_LOG(LogUALIndexBuilder, Log,
+		TEXT("Shared extension specs=%d field specs=%d newly mirrored=%d"),
+		Extensions.Num(), Fields.Num(), MirroredSpecs);
 
 	// 4) 增量：读取已有清单的 content_hash。
 	TMap<FString, FString> ExistingHashes;
@@ -239,8 +342,10 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 			ExistingHashes.Num());
 	}
 
-	// 5) 打开 Sink（生产为 DuckDB C API Appender，这里为 YAML 文档流参考实现）。
-	FUALYamlIndexSink Sink(OutName, ProjectDir);
+	// 5) 打开 Sink。FUALDuckDbIndexSink 在 UAL_WITH_DUCKDB=0（默认）时透明转发
+	//    到 FUALYamlIndexSink，输出仍是 16 键 YAML 文档流；宿主启用宏并提供
+	//    ThirdParty DuckDB C API 时改走 C API 写入路径。
+	FUALDuckDbIndexSink Sink(OutName, ProjectDir);
 	if (!Sink.Begin())
 	{
 		UE_LOG(LogUALIndexBuilder, Error, TEXT("Failed to open index sink."));
@@ -285,12 +390,14 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 	int32 Skipped = 0;
 	int32 EdgeCount = 0;
 	int32 CoOccurCount = 0;
+	int32 ProjectedFieldCount = 0;
+	TArray<FUALExtensionField> ExtensionFields;
 
 	for (int32 AssetIdx = 0; AssetIdx < Assets.Num(); ++AssetIdx)
 	{
 		const FAssetData& Asset = Assets[AssetIdx];
 		FUALAssetRecord Record;
-		if (!Registry.ExtractRecord(Asset, Record))
+		if (!Registry->ExtractRecord(Asset, Record))
 		{
 			++Skipped;
 			continue;
@@ -309,6 +416,20 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 
 		Sink.AppendRecord(Record);
 		++Written;
+
+		// 6c) 独立类型化扩展载荷：只读既有 InterfaceSpec / DomainSpec，
+		//     绝不写入 16 键文档，也不新增顶层键。仅在 -EmitExtensions 时落盘。
+		FUALExtensionRecord ExtensionRecord;
+		ExtensionRecord.AssetPath = Record.AssetPath;
+		Fields.Project(Record, ExtensionRecord.Fields);
+		ProjectedFieldCount += ExtensionRecord.Fields.Num();
+		if (bEmitExtensions)
+		{
+			for (const FUALExtensionField& Field : ExtensionRecord.Fields)
+			{
+				ExtensionFields.Add(Field);
+			}
+		}
 
 		// 7) DEPENDS_ON 边：只读 AssetRegistry 依赖关系，不加载资源。
 		//    /Script/... 是 UClass 引用而非资产包，在此过滤，避免污染引用图谱。
@@ -366,9 +487,35 @@ int32 UUALIndexBuilderCommandlet::Main(const FString& Params)
 	}
 
 	const bool bCommitted = Sink.Commit();
-	UE_LOG(LogUALIndexBuilder, Log,
-		TEXT("=== UALIndexBuilder done: total=%d written=%d skipped=%d edges=%d cooccurs=%d commit=%d ==="),
-		Assets.Num(), Written, Skipped, EdgeCount, CoOccurCount, bCommitted ? 1 : 0);
 
-	return bCommitted ? 0 : 1;
+	// 可选独立文档流：只包含 FUALExtensionField 记录，按稳定键排序，
+	// 无时间戳 / 绝对路径 / 随机 ID；16 键 index.yaml 不受影响。
+	bool bExtensionsOk = true;
+	if (bEmitExtensions)
+	{
+		ExtensionFields.Sort([](const FUALExtensionField& A, const FUALExtensionField& B)
+		{
+			return A.Key().Compare(B.Key(), ESearchCase::CaseSensitive) < 0;
+		});
+		TArray<FString> ExtensionDocs;
+		ExtensionDocs.Reserve(ExtensionFields.Num());
+		for (const FUALExtensionField& Field : ExtensionFields)
+		{
+			ExtensionDocs.Add(BuildExtensionDoc(Field));
+		}
+		const FString StagingDir = FPaths::Combine(ProjectDir, TEXT(".ual"), TEXT("staging"));
+		IFileManager::Get().MakeDirectory(*StagingDir, true);
+		const FString ExtensionPath = FPaths::Combine(StagingDir, TEXT("extensions.yaml"));
+		bExtensionsOk = FFileHelper::SaveStringToFile(UEYaml::EmitStream(ExtensionDocs),
+			*ExtensionPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+		UE_LOG(LogUALIndexBuilder, Log, TEXT("Extension stream: %d doc(s), ok=%d"),
+			ExtensionDocs.Num(), bExtensionsOk ? 1 : 0);
+	}
+
+	UE_LOG(LogUALIndexBuilder, Log,
+		TEXT("=== UALIndexBuilder done: total=%d written=%d skipped=%d edges=%d cooccurs=%d projected_fields=%d commit=%d ==="),
+		Assets.Num(), Written, Skipped, EdgeCount, CoOccurCount, ProjectedFieldCount,
+		bCommitted ? 1 : 0);
+
+	return (bCommitted && bExtensionsOk) ? 0 : 1;
 }

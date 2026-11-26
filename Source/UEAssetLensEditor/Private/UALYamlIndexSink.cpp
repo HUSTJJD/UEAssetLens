@@ -112,14 +112,31 @@ FString FUALYamlIndexSink::BuildRecordYaml(const FUALAssetRecord& Record,
 	Obj->SetStringField(TEXT("skeleton_path"), Record.SkeletonPath);
 	Obj->SetStringField(TEXT("dominant_limb"), Record.DominantLimb);
 
-	// fingerprint_vec：恰好 16 元数组（不足补 0）
-	TArray<TSharedPtr<FJsonValue>> Fp;
-	for (int32 i = 0; i < 16; ++i)
+	// fingerprint_vec FLOAT[16] 是可空字段：只有恰好 16 个有限 float 才写数组。
+	// 缺失 / 长度异常 / 非有限值一律经 UEYaml emitter 写成 NULL，绝不补 16 个 0
+	// （全零向量会让 DuckDB 余弦查重退化；见 PROTOCOL.md §1 / CLAUDE.md §3）。
+	bool bHasFingerprint = Record.FingerprintVec.Num() == 16;
+	for (const float V : Record.FingerprintVec)
 	{
-		const float V = Record.FingerprintVec.IsValidIndex(i) ? Record.FingerprintVec[i] : 0.0f;
-		Fp.Add(MakeShared<FJsonValueNumber>(SafeNumber(V)));
+		if (!(FMath::Abs(V) <= TNumericLimits<float>::Max()))
+		{
+			bHasFingerprint = false;
+			break;
+		}
 	}
-	Obj->SetArrayField(TEXT("fingerprint_vec"), Fp);
+	if (bHasFingerprint)
+	{
+		TArray<TSharedPtr<FJsonValue>> Fp;
+		for (const float V : Record.FingerprintVec)
+		{
+			Fp.Add(MakeShared<FJsonValueNumber>(SafeNumber(V)));
+		}
+		Obj->SetArrayField(TEXT("fingerprint_vec"), Fp);
+	}
+	else
+	{
+		Obj->SetField(TEXT("fingerprint_vec"), MakeShared<FJsonValueNull>());
+	}
 
 	// interface_spec / domain_spec：字符串 -> 字符串对象（MAP(VARCHAR,VARCHAR)）。
 	TSharedPtr<FJsonObject> Iface = MakeShared<FJsonObject>();
@@ -154,7 +171,8 @@ FString FUALYamlIndexSink::BuildRecordYaml(const FUALAssetRecord& Record,
 	}
 	Obj->SetArrayField(TEXT("edges"), EdgeArr);
 
-	// 自写缩进 emitter：所有字符串显式双引号，避免中文/冒号/引号/换行破坏语义。
+	// 唯一 emitter：所有字符串显式双引号，NULL 由 FJsonValueNull 交给 UEYaml；
+	// 禁止手工拼接 YAML（统一走共享 emitter）。
 	return UEYaml::EmitDocument(Obj);
 }
 

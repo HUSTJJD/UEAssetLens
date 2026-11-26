@@ -1,0 +1,97 @@
+version: 1
+defaults:
+  namespace: field
+  source: domain_spec
+  family_key: feature.family
+  priority: 0
+aliases:
+  StaticMesh: static_mesh
+  AnimMontage: anim_montage
+  AnimSequence: anim_montage
+  BlendSpace: anim_montage
+  Material: material
+  MaterialInstanceConstant: material
+  MaterialInstanceDynamic: material
+  Blueprint: blueprint
+  WidgetBlueprint: blueprint
+  AnimBlueprint: blueprint
+  DataTable: data_table
+  CurveTable: data_table
+  CompositeDataTable: data_table
+families:
+  common:
+    applies_to: ['*']
+    priority: 0
+    taxonomy_family: Misc
+    fields:
+      feature_family: {type: string, key: feature.family, default: ''}
+      feature_class_path: {type: string, key: feature.class_path, default: ''}
+      feature_path_depth: {type: integer, key: feature.path_depth, default: 0}
+      feature_name_tokens: {type: integer, key: feature.name_tokens, default: 0}
+      feature_tag_count: {type: integer, key: feature.tag_count, default: 0}
+      feature_tag_keys: {type: yaml, key: feature.tag_keys, default: []}
+      feature_capabilities: {type: yaml, key: feature.capabilities, default: []}
+      feature_stats: {type: yaml, key: feature.stats, default: {}}
+      feature_profile: {type: yaml, key: feature.profile, default: {}}
+      feature_profile_rule: {type: string, key: feature.profile_rule, default: ''}
+  static_mesh:
+    applies_to: [StaticMesh]
+    priority: 20
+    taxonomy_family: Mesh
+    fields:
+      mesh_material_slots: {type: yaml, source: interface_spec, key: material_slots, default: []}
+      mesh_sockets_referenced: {type: yaml, source: interface_spec, key: sockets_referenced, default: []}
+      mesh_skeleton: {type: string, source: interface_spec, key: skeleton, default: ''}
+      mesh_triangle_count: {type: integer, key: triangle_count, default: 0}
+      mesh_lod_count: {type: integer, key: lod_count, default: 0}
+      mesh_bounds_size: {type: yaml, key: bounds_size, default: [0.0, 0.0, 0.0]}
+      mesh_nanite_enabled: {type: boolean, key: nanite_enabled, default: false}
+      mesh_collision_complexity: {type: string, key: collision_complexity, default: ''}
+  anim_montage:
+    applies_to: [AnimMontage, AnimSequence, BlendSpace]
+    priority: 20
+    taxonomy_family: Animation
+    fields:
+      anim_skeleton: {type: string, source: interface_spec, key: skeleton, default: ''}
+      anim_duration: {type: number, key: duration, default: 0.0}
+      anim_forward_cm: {type: number, key: forward_cm, default: 0.0}
+      anim_strike_window: {type: string, key: strike_window, default: ''}
+      anim_root_motion_delta: {type: yaml, key: root_motion_delta, default: [0.0, 0.0, 0.0]}
+      anim_phases: {type: yaml, key: phases, default: {}}
+      anim_notifies: {type: yaml, key: notifies, default: []}
+      anim_kinematics: {type: yaml, key: kinematics, default: {}}
+      anim_hint: {type: string, key: hint, default: ''}
+  material:
+    applies_to: [Material, MaterialInstanceConstant, MaterialInstanceDynamic]
+    priority: 20
+    taxonomy_family: Material
+    fields:
+      material_parent: {type: string, source: interface_spec, key: parent, default: ''}
+      material_exposed_params: {type: string, key: exposed_params, default: ''}
+      material_blend_mode: {type: string, key: blend_mode, default: ''}
+      material_shading_model: {type: string, key: shading_model, default: ''}
+      material_two_sided: {type: boolean, key: two_sided, default: false}
+      material_hint: {type: string, key: hint, default: ''}
+  blueprint:
+    applies_to: [Blueprint, WidgetBlueprint, AnimBlueprint]
+    priority: 20
+    taxonomy_family: Blueprint
+    fields:
+      blueprint_parent_class: {type: string, source: record, key: parent_class, default: ''}
+      blueprint_type: {type: string, key: blueprint_type, default: ''}
+      blueprint_generated_class: {type: string, key: generated_class, default: ''}
+      blueprint_components: {type: yaml, key: components, default: []}
+      blueprint_variables: {type: yaml, key: variables, default: []}
+      blueprint_functions: {type: yaml, key: functions, default: []}
+      blueprint_interfaces: {type: yaml, key: interfaces, default: []}
+      blueprint_hint: {type: string, key: hint, default: ''}
+  data_table:
+    applies_to: [DataTable, CurveTable, CompositeDataTable]
+    priority: 20
+    taxonomy_family: Data
+    fields:
+      data_table_row_struct: {type: string, key: row_struct, default: ''}
+      data_table_row_count: {type: integer, key: row_count, default: 0}
+      data_table_columns: {type: yaml, key: columns, default: []}
+      data_table_import_path: {type: string, key: import_path, default: ''}
+      data_table_hint: {type: string, key: hint, default: ''}

@@ -1,0 +1,61 @@
+# Declarative fake native payload adapter (data only; no code resolution).
+# Every record below is a fixed offline sample.  The adapter never loads an
+# asset, never exports a raw payload, never writes an index and never claims
+# that a real UE native binary diff is available.  All host capabilities stay
+# specification / not landed.  This file has no top-level `rules` or `id`, so
+# it does not join the five-layer ruleset consumed by asset_diff.py.
+native_payload_adapter:
+  version: 1
+  contract: native_payload_adapter
+  status: offline_source_level_contract
+  default_loader: none
+  materialization: canonical_text
+  page_limit: 80
+  boundaries:
+    asset_load: false
+    binary_payload: false
+    raw_binary_export: false
+    index_write: false
+    host_call: false
+  host_only:
+    capability: ue_native_binary_diff
+    status: spec_not_landed
+    real_ue_native_diff: spec_not_landed
+    real_uasset_write: spec_not_landed
+    compile_pie: spec_not_landed
+    asset_registry_rescan: spec_not_landed
+    requires_injected_host_executor: true
+  layers:
+    L1:
+      source: index.reflection_maps
+      loader: none
+      fields: [interface_spec, domain_spec]
+      fake_payloads:
+        - asset_path: /Game/Demo/BP_Player
+          interface_spec: {quality_tier: draft, read_only: true}
+          domain_spec: {feature.count: '2', feature.kind: character}
+        - asset_path: /Game/Demo/BP_Enemy
+          interface_spec: {quality_tier: final, read_only: true}
+          domain_spec: {feature.count: '3', feature.kind: enemy}
+    L3:
+      source: index.yaml_cache
+      loader: none
+      fields: [yaml_cache]
+      fake_payloads:
+        - asset_path: /Game/Demo/BP_Player
+          yaml_cache: 'asset_class: Blueprint | asset_path: /Game/Demo/BP_Player'
+          cache_kind: index_text
+        - asset_path: /Game/Demo/BP_Enemy
+          yaml_cache: 'asset_class: Blueprint | asset_path: /Game/Demo/BP_Enemy'
+          cache_kind: index_text
+    L4:
+      source: canonical.L1.L3
+      loader: none
+      fields: [canonical_sha256]
+      fake_payloads:
+        - asset_path: /Game/Demo/BP_Player
+          digest_source: canonical_text
+          digest_scope: L1.L3
+        - asset_path: /Game/Demo/BP_Enemy
+          digest_source: canonical_text
+          digest_scope: L1.L3

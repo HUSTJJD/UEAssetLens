@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ual_common import db
+from ual_common import db, fields
 from ual_common.fingerprint import (
     animation_fingerprint, cosine_similarity, mesh_fingerprint,
     radial_histogram,
@@ -19,6 +19,7 @@ from ual_cli import ual_cli
 
 SEED = Path(__file__).parent / "seed.yaml"
 HERO = "/Game/Characters/Knight/Anim/AM_Knight_HeavySlash_02"
+DETERMINISTIC_ID = "0" * 64
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +28,7 @@ def index(tmp_path_factory) -> Path:
     con = db.open_write(path)
     stats = db.ingest_records(con, db.load_yaml_docs(SEED))
     assert stats == {"assets": 9, "edges": 5}
+    fields.materialize(con)
     con.close()
     return path
 
@@ -44,7 +46,7 @@ def test_schema_is_idempotent(index):
     version = con.execute(
         "SELECT value FROM schema_meta WHERE key = 'schema_version'"
     ).fetchone()[0]
-    assert version == "2.0"
+    assert version == "3.0"
     assert con.execute("SELECT COUNT(*) FROM assets").fetchone()[0] == 9
     con.close()
 
@@ -160,25 +162,29 @@ def test_cli_gates_return_expected_exit_codes(index, tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
-def test_engine_bridge_dispatches_all_tools(ro):
+def test_engine_bridge_dispatches_all_tools(ro, monkeypatch, tmp_path):
     from ual_mcp import engine_bridge
 
-    cases = [
-        ("UEAssetLens.AssetSemanticToolset.SearchAssets", {"asset_class": "AnimMontage", "limit": 2}),
-        ("UEAssetLens.AssetSemanticToolset.InspectAsset", {"key": "AnimMontage:AM_Knight_HeavySlash_02"}),
-        ("UEAssetLens.AssetSemanticToolset.GetCooccurringBundle", {"asset_path": HERO, "top_k": 2}),
-        ("UEAssetLens.AssetSemanticToolset.FindSimilarAssets", {"asset_path": HERO, "threshold": 0.95}),
-        ("UEAssetLens.AssetGraphToolset.GetDependencies", {"asset_path": HERO, "max_depth": 3}),
-        ("UEAssetLens.AssetGraphToolset.GetReferencers", {"asset_path": HERO, "max_depth": 3}),
-        ("UEAssetLens.AssetGraphToolset.GetIndexHealth", {"top_n": 3}),
-        ("UEAssetLens.AssetGraphToolset.FindDuplicates", {"threshold": 0.95, "limit": 5}),
-        ("UEAssetLens.AssetSemanticToolset.SearchByFeatures", {"feature_key": "feature.family"}),
-        ("UEAssetLens.AssetSemanticToolset.ListFeatureKeys", {"limit": 10}),
-    ]
-    assert len(cases) == len(tools.TOOL_NAMES)
+    monkeypatch.setattr(tools, "RUNTIME_ARTIFACT_ROOT", tmp_path / "runtime")
+    cases = engine_bridge.self_test_cases()
+    static_cases = engine_bridge.static_self_test_cases()
+    assert len(static_cases) == len(tools.STATIC_TOOL_NAMES) == 10
+    assert len(cases) == len(tools.ALL_TOOL_DEFS) == len(tools.TOOL_NAMES) == 30
+    assert {name for name, _ in cases} == set(tools.TOOL_NAMES)
+    identifiers = {
+        "diff_id": DETERMINISTIC_ID,
+        "plan_id": DETERMINISTIC_ID,
+        "game_spec_id": DETERMINISTIC_ID,
+        "workflow_id": DETERMINISTIC_ID,
+    }
     for name, arguments in cases:
-        text = engine_bridge.dispatch(ro, name, arguments)
+        text = engine_bridge.dispatch(
+            ro, name, engine_bridge.resolve_case_arguments(arguments, identifiers)
+        )
         assert text.startswith("# UEAssetLens"), name
+        if name in tools.RUNTIME_TOOL_NAMES:
+            assert text.startswith("# UEAssetLens TOON v1 (Zero-VLM)"), name
+        engine_bridge.capture_case_identifiers(text, identifiers)
     with pytest.raises(KeyError):
         engine_bridge.dispatch(ro, "ual_not_a_tool", {})
 
@@ -217,14 +223,26 @@ def test_tool_schemas_contract_matches_python_server():
 
     schema_path = Path(__file__).resolve().parents[1] / "ual_mcp" / "tool_schemas.yaml"
     payload = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == "3.0"
+    assert payload["schema_version"] == "4.0"
+    assert "TOOL_DEFS" in payload["source"]
+    assert "Config/UAL/extensions/tools.yaml" in payload["source"]
     assert [t["name"] for t in payload["tools"]] == list(mcp_tools.TOOL_NAMES)
+    assert len(payload["tools"]) == len(mcp_tools.ALL_TOOL_DEFS) == 30
     for tool in payload["tools"]:
+        assert tool["name"].startswith("UEAssetLens.")
+        assert not tool["name"].startswith("ual_")
         assert tool["inputSchema"]["type"] == "object"
+        assert tool["accessMode"] in ("Read", "Write", "Execute")
+        assert isinstance(tool["readOnlyHint"], bool)
+        assert tool["annotations"] == {
+            "accessMode": tool["accessMode"],
+            "readOnlyHint": tool["readOnlyHint"],
+        }
+        assert tool["meta"] == {"accessMode": tool["accessMode"]}
 
 
 def test_server_tool_schemas_match_tool_defs(ro):
-    """The SDK-generated schemas must stay aligned with the shared TOOL_DEFS."""
+    """SDK-generated static + dynamic schemas stay aligned with ALL_TOOL_DEFS."""
     import asyncio
 
     from ual_mcp import server, tools as mcp_tools
@@ -233,7 +251,8 @@ def test_server_tool_schemas_match_tool_defs(ro):
     server._register(sdk, ro)
     generated = {tool.name: tool.input_schema for tool in asyncio.run(sdk.list_tools())}
     assert set(generated) == set(mcp_tools.TOOL_NAMES)
-    for tool in mcp_tools.TOOL_DEFS:
+    assert len(generated) == len(mcp_tools.ALL_TOOL_DEFS) == 30
+    for tool in mcp_tools.ALL_TOOL_DEFS:
         declared = set(tool["inputSchema"].get("properties", {}))
         actual = set(generated[tool["mcp_name"]].get("properties", {}))
         assert declared == actual, tool["name"]
